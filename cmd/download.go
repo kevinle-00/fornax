@@ -16,8 +16,8 @@ var downloadCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		url := args[0]
 		output, _ := cmd.Flags().GetString("output")
-
-		err := download(url, output)
+		quality, _ := cmd.Flags().GetString("quality")
+		err := download(url, output, quality)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
@@ -28,13 +28,18 @@ var downloadCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(downloadCmd)
 	downloadCmd.Flags().StringP("output", "o", "", "Output file")
+	downloadCmd.Flags().StringP("quality", "q", "", "Video quality")
 }
 
-func download(url, output string) error {
-	cmdArgs := []string{url}
+func download(url, output, quality string) error {
+	cmdArgs := []string{}
 	if output != "" {
-		cmdArgs = []string{"-o", output, url}
+		cmdArgs = append(cmdArgs, "-o", output)
 	}
+	if quality != "" {
+		cmdArgs = append(cmdArgs, "-f", quality)
+	}
+	cmdArgs = append(cmdArgs, url)
 	cmd := exec.Command("yt-dlp", cmdArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
