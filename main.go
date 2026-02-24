@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 3 {
+	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)
 	}
@@ -38,6 +38,9 @@ func main() {
 			fmt.Println("Error:", err)
 			os.Exit(1)
 		}
+	default:
+		printUsage()
+		os.Exit(1)
 	}
 }
 
@@ -57,7 +60,6 @@ func download(url string, opts ...string) error {
 	}
 
 	cmd := exec.Command("yt-dlp", cmdArgs...)
-	fmt.Println(cmdArgs)
 	// Piping the yt-dlp's standard output/errors to our terminal
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
