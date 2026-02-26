@@ -8,6 +8,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// TODO: Refactor to make download and convert (encode) its jkown packages, seperated from CLI code.
+
 // fornax process <url> <output>
 
 var processCmd = &cobra.Command{
