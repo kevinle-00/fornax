@@ -30,8 +30,6 @@ func New() *YtDlp {
 
 func (y *YtDlp) Download(ctx context.Context, url, outputPath, quality string) error {
 	cmdArgs := []string{} // Slice syntax, slices in go are dynamic arrays
-
-	// TODO: Need to add validation for inputs
 	if outputPath != "" {
 		cmdArgs = append(cmdArgs, "-o", outputPath)
 	}
