@@ -1,14 +1,15 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/kevinle-00/fornax/internal/download"
+	"github.com/kevinle-00/fornax/internal/encode"
 	"github.com/spf13/cobra"
 )
-
-// TODO: Refactor to make download and convert (encode) its jkown packages, seperated from CLI code.
 
 // fornax process <url> <output>
 
@@ -36,7 +37,8 @@ func init() {
 
 func process(url, outputPath, quality string) error {
 	tempPath := "/tmp/fornax-temp.%(ext)s"
-	err := download(url, tempPath, quality)
+	downloader := download.New()
+	err := downloader.Download(context.Background(), url, tempPath, quality)
 	if err != nil {
 		return err
 	}
@@ -51,7 +53,10 @@ func process(url, outputPath, quality string) error {
 
 	tempFile := files[0]
 	defer os.Remove(tempFile)
-	err = convert(tempFile, outputPath)
+	encoder := encode.New()
+
+	// TODO: make sure cancellable
+	err = encoder.Encode(context.Background(), tempFile, outputPath)
 	if err != nil {
 		return err
 	}
