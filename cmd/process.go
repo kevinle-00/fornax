@@ -8,6 +8,7 @@ import (
 
 	"github.com/kevinle-00/fornax/internal/download"
 	"github.com/kevinle-00/fornax/internal/encode"
+	"github.com/kevinle-00/fornax/internal/validate"
 	"github.com/spf13/cobra"
 )
 
@@ -20,6 +21,16 @@ var processCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		url := args[0]
 		outputPath := args[1]
+
+		if err := validate.IsValidURL(url); err != nil {
+			fmt.Println("Error:", err)
+			os.Exit(1)
+		}
+		if err := validate.IsValidOutputPath(outputPath); err != nil {
+			fmt.Println("Error:", err)
+			os.Exit(1)
+		}
+
 		quality, _ := cmd.Flags().GetString("quality")
 
 		err := process(url, outputPath, quality)
