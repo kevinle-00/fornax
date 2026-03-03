@@ -2,6 +2,7 @@
 package queue
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -10,7 +11,7 @@ import (
 
 type Queue interface {
 	Enqueue(job job.Job) error
-	Dequeue() job.Job
+	Dequeue(ctx context.Context) (job.Job, bool)
 	GetJobs() []job.Job
 }
 
@@ -39,8 +40,13 @@ func (j *JobQueue) Enqueue(job job.Job) error {
 	}
 }
 
-func (j *JobQueue) Dequeue() job.Job {
-	return <-j.jobs
+func (j *JobQueue) Dequeue(ctx context.Context) (job.Job, bool) {
+	select {
+	case job := <-j.jobs:
+		return job, true
+	case <-ctx.Done():
+		return nil, false
+	}
 }
 
 func (j *JobQueue) GetJobs() []job.Job {

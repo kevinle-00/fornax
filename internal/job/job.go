@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/kevinle-00/fornax/internal/download"
@@ -46,6 +47,7 @@ type BaseJob struct {
 	ID     string
 	Status Status
 	Error  error
+	mu     sync.Mutex
 }
 
 func (b *BaseJob) GetID() string {
@@ -53,7 +55,27 @@ func (b *BaseJob) GetID() string {
 }
 
 func (b *BaseJob) GetStatus() Status {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	return b.Status
+}
+
+func (b *BaseJob) SetStatus(s Status) {
+	b.mu.Lock()
+	b.Status = s
+	b.mu.Unlock()
+}
+
+func (b *BaseJob) GetError() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.Error
+}
+
+func (b *BaseJob) SetError(e error) {
+	b.mu.Lock()
+	b.Error = e
+	b.mu.Unlock()
 }
 
 type DownloadJob struct {
@@ -63,14 +85,14 @@ type DownloadJob struct {
 }
 
 func (d *DownloadJob) Execute(ctx context.Context) error {
-	d.Status = StatusProcessing
+	d.SetStatus(StatusProcessing)
 	err := d.downloader.Download(ctx, d.Inputs.URL, d.Inputs.OutputPath, d.Inputs.Quality)
 	if err != nil {
-		d.Status = StatusFailed
-		d.Error = err
+		d.SetStatus(StatusFailed)
+		d.SetError(err)
 		return err
 	}
-	d.Status = StatusDone
+	d.SetStatus(StatusDone)
 	return nil
 }
 
@@ -89,14 +111,15 @@ type EncodeJob struct {
 }
 
 func (e *EncodeJob) Execute(ctx context.Context) error {
-	e.Status = StatusProcessing
+	e.SetStatus(StatusProcessing)
 	err := e.encoder.Encode(ctx, e.Inputs.InputPath, e.Inputs.OutputPath)
 	if err != nil {
-		e.Status = StatusFailed
-		e.Error = err
+		e.SetStatus(StatusFailed)
+		e.SetError(err)
+
 		return err
 	}
-	e.Status = StatusDone
+	e.SetStatus(StatusDone)
 	return nil
 }
 
@@ -116,39 +139,42 @@ type ProcessJob struct {
 }
 
 func (p *ProcessJob) Execute(ctx context.Context) error {
-	p.Status = StatusProcessing
+	p.SetStatus(StatusProcessing)
 
 	tempBase := "/tmp/fornax-temp-" + p.ID
 	tempPath := tempBase + ".%(ext)s"
 
 	if err := p.downloader.Download(ctx, p.Inputs.URL, tempPath, ""); err != nil {
-		p.Status = StatusFailed
-		p.Error = err
-		return err
+		p.SetStatus(StatusFailed)
+		p.SetError(err)
+
+		return p.GetError()
 	}
 
 	files, err := filepath.Glob(tempBase + ".*")
 	if err != nil {
-		p.Status = StatusFailed
-		p.Error = err
+		p.SetStatus(StatusFailed)
+		p.SetError(err)
+
 		return err
 	}
 	if len(files) == 0 {
-		p.Status = StatusFailed
-		p.Error = errors.New("could not find downloaded file in /tmp")
-		return p.Error
+		p.SetStatus(StatusFailed)
+		p.SetError(errors.New("could not find downloaded file in /tmp"))
+		return p.GetError()
 	}
 
 	tempFile := files[0]
 	defer os.Remove(tempFile)
 
 	if err := p.encoder.Encode(ctx, tempFile, p.Inputs.OutputPath); err != nil {
-		p.Status = StatusFailed
-		p.Error = err
-		return err
+		p.SetStatus(StatusFailed)
+		p.SetError(err)
+
+		return p.GetError()
 	}
 
-	p.Status = StatusDone
+	p.SetStatus(StatusDone)
 	return nil
 }
 
