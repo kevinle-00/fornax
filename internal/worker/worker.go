@@ -3,6 +3,7 @@ package worker
 
 import (
 	"context"
+	"log"
 	"sync"
 
 	"github.com/kevinle-00/fornax/internal/queue"
@@ -36,7 +37,10 @@ func (w *WorkerPool) Start(ctx context.Context) error {
 					return
 				}
 
-				job.Execute(ctx)
+				if err := job.Execute(ctx); err != nil {
+					log.Printf("job %s failed: %v", job.GetID(), err)
+				}
+
 			}
 		})
 	}

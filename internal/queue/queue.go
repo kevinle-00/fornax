@@ -13,6 +13,7 @@ type Queue interface {
 	Enqueue(job job.Job) error
 	Dequeue(ctx context.Context) (job.Job, bool)
 	GetJobs() []job.Job
+	Close()
 }
 
 type JobQueue struct {
@@ -21,7 +22,7 @@ type JobQueue struct {
 	mu   sync.Mutex
 }
 
-func New(capacity int) *JobQueue {
+func NewJobQueue(capacity int) *JobQueue {
 	return &JobQueue{
 		jobs: make(chan job.Job, capacity),
 		all:  []job.Job{},
@@ -42,7 +43,10 @@ func (j *JobQueue) Enqueue(job job.Job) error {
 
 func (j *JobQueue) Dequeue(ctx context.Context) (job.Job, bool) {
 	select {
-	case job := <-j.jobs:
+	case job, ok := <-j.jobs:
+		if !ok {
+			return nil, false
+		}
 		return job, true
 	case <-ctx.Done():
 		return nil, false
@@ -55,4 +59,8 @@ func (j *JobQueue) GetJobs() []job.Job {
 	allCopy := make([]job.Job, len(j.all))
 	copy(allCopy, j.all)
 	return allCopy
+}
+
+func (j *JobQueue) Close() {
+	close(j.jobs)
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 // Interface in Go defines behaviour, a contract of methods that need to be implemented
@@ -31,6 +32,10 @@ func New() *YtDlp {
 func (y *YtDlp) Download(ctx context.Context, url, outputPath, quality string) error {
 	cmdArgs := []string{} // Slice syntax, slices in go are dynamic arrays
 	if outputPath != "" {
+		info, err := os.Stat(outputPath)
+		if err == nil && info.IsDir() {
+			outputPath = filepath.Join(outputPath, "%(title)s.%(ext)s")
+		}
 		cmdArgs = append(cmdArgs, "-o", outputPath)
 	}
 	if quality != "" {
