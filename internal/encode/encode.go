@@ -11,7 +11,7 @@ type Encoder interface {
 	Encode(ctx context.Context, inputPath, outputPath string) error
 }
 
-type FFmpeg struct{} //
+type FFmpeg struct{}
 
 func New() *FFmpeg {
 	return &FFmpeg{}

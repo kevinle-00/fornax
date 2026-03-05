@@ -26,7 +26,7 @@ func IsValidInputPath(path string) error {
 	}
 
 	// os.Stat returns a FileInfo struct (we ignore it) and an error,
-	// os.IsNotExist() takes in the error and returns true if the directory exists
+	// os.IsNotExist() takes in the error and returns true if the path does not exist
 	// and false if it doesnt
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return fmt.Errorf("path does not exist: %s", path)
