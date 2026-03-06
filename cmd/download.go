@@ -42,9 +42,9 @@ var downloadCmd = &cobra.Command{
 				os.Exit(1)
 			}
 			downloadInputs := job.DownloadInputs{
-				URL:        url,
-				OutputPath: output,
-				Quality:    quality,
+				URL:             url,
+				OutputDirectory: output,
+				Quality:         quality,
 			}
 			newJob := job.NewDownloadJob(downloadInputs, downloader)
 			if err := jobQueue.Enqueue(newJob); err != nil {

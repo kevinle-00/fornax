@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -23,9 +24,9 @@ const (
 )
 
 type DownloadInputs struct {
-	URL        string
-	OutputPath string
-	Quality    string
+	URL             string
+	OutputDirectory string
+	Quality         string
 }
 
 type EncodeInputs struct {
@@ -33,8 +34,10 @@ type EncodeInputs struct {
 	OutputPath string
 }
 type ProcessInputs struct {
-	URL        string
-	OutputPath string
+	URL             string
+	OutputDirectory string
+	Format          string
+	Quality         string
 }
 
 type Job interface {
@@ -86,7 +89,7 @@ type DownloadJob struct {
 
 func (d *DownloadJob) Execute(ctx context.Context) error {
 	d.SetStatus(StatusProcessing)
-	err := d.downloader.Download(ctx, d.Inputs.URL, d.Inputs.OutputPath, d.Inputs.Quality)
+	err := d.downloader.Download(ctx, d.Inputs.URL, d.Inputs.OutputDirectory, d.Inputs.Quality)
 	if err != nil {
 		d.SetStatus(StatusFailed)
 		d.SetError(err)
@@ -141,17 +144,17 @@ type ProcessJob struct {
 func (p *ProcessJob) Execute(ctx context.Context) error {
 	p.SetStatus(StatusProcessing)
 
-	tempBase := "/tmp/fornax-temp-" + p.ID
-	tempPath := tempBase + ".%(ext)s"
+	tempPrefix := "/tmp/fornax-" + p.ID
+	downloadTemplate := tempPrefix + "-%(title)s.%(ext)s"
 
-	if err := p.downloader.Download(ctx, p.Inputs.URL, tempPath, ""); err != nil {
+	if err := p.downloader.Download(ctx, p.Inputs.URL, downloadTemplate, p.Inputs.Quality); err != nil {
 		p.SetStatus(StatusFailed)
 		p.SetError(err)
 
 		return p.GetError()
 	}
 
-	files, err := filepath.Glob(tempBase + ".*")
+	files, err := filepath.Glob(tempPrefix + "-*.*")
 	if err != nil {
 		p.SetStatus(StatusFailed)
 		p.SetError(err)
@@ -164,10 +167,16 @@ func (p *ProcessJob) Execute(ctx context.Context) error {
 		return p.GetError()
 	}
 
-	tempFile := files[0]
-	defer os.Remove(tempFile)
+	downloadedFile := files[0]
+	defer os.Remove(downloadedFile)
 
-	if err := p.encoder.Encode(ctx, tempFile, p.Inputs.OutputPath); err != nil {
+	fileName := filepath.Base(downloadedFile)
+	fileExt := filepath.Ext(fileName)
+	fileNameNoExt := strings.TrimSuffix(fileName, fileExt)
+	videoTitle := strings.TrimPrefix(fileNameNoExt, "fornax-"+p.ID+"-")
+	outputPath := filepath.Join(p.Inputs.OutputDirectory, videoTitle+"."+p.Inputs.Format)
+
+	if err := p.encoder.Encode(ctx, downloadedFile, outputPath); err != nil {
 		p.SetStatus(StatusFailed)
 		p.SetError(err)
 

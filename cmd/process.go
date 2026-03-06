@@ -4,72 +4,69 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/kevinle-00/fornax/internal/download"
 	"github.com/kevinle-00/fornax/internal/encode"
+	"github.com/kevinle-00/fornax/internal/job"
+	"github.com/kevinle-00/fornax/internal/queue"
 	"github.com/kevinle-00/fornax/internal/validate"
+	"github.com/kevinle-00/fornax/internal/worker"
 	"github.com/spf13/cobra"
 )
 
-// fornax process <url> <output>
+// fornax process <url>... -f mp4 -o output/
 
 var processCmd = &cobra.Command{
-	Use:   "process <url> <output>",
+	Use:   "process <url>... -f <format>",
 	Short: "Download youtube video and then convert to desired media file format",
-	Args:  cobra.ExactArgs(2),
+	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		url := args[0]
-		outputPath := args[1]
+		outputDirectory, _ := cmd.Flags().GetString("output")
+		format, _ := cmd.Flags().GetString("format")
 
-		if err := validate.IsValidURL(url); err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
-		}
-		if err := validate.IsValidOutputPath(outputPath); err != nil {
+		if err := validate.IsValidOutputPath(outputDirectory); err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
 		}
 
 		quality, _ := cmd.Flags().GetString("quality")
 
-		err := process(url, outputPath, quality)
-		if err != nil {
+		encoder := encode.New()
+		downloader := download.New()
+		jobQueue := queue.NewJobQueue(10)
+		for _, url := range args {
+			if err := validate.IsValidURL(url); err != nil {
+				fmt.Println("Error:", err)
+				os.Exit(1)
+			}
+
+			processInputs := job.ProcessInputs{
+				URL:             url,
+				OutputDirectory: outputDirectory,
+				Format:          format,
+				Quality:         quality,
+			}
+			newJob := job.NewProcessJob(processInputs, downloader, encoder)
+			if err := jobQueue.Enqueue(newJob); err != nil {
+				fmt.Println("Error:", err)
+				os.Exit(1)
+			}
+		}
+		jobQueue.Close()
+		workerPool := worker.NewWorkerPool(jobQueue, 5)
+		if err := workerPool.Start(context.Background()); err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
 		}
+
+		workerPool.Stop()
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(processCmd)
 	processCmd.Flags().StringP("quality", "q", "", "Video quality")
-}
-
-func process(url, outputPath, quality string) error {
-	tempPath := "/tmp/fornax-temp.%(ext)s"
-	downloader := download.New()
-	err := downloader.Download(context.Background(), url, tempPath, quality)
-	if err != nil {
-		return err
-	}
-
-	files, globErr := filepath.Glob("/tmp/fornax-temp.*")
-	if globErr != nil {
-		return globErr
-	}
-	if len(files) == 0 {
-		return fmt.Errorf("could not find downloaded file in /tmp")
-	}
-
-	tempFile := files[0]
-	defer os.Remove(tempFile)
-	encoder := encode.New()
-
-	// TODO: make sure cancellable
-	err = encoder.Encode(context.Background(), tempFile, outputPath)
-	if err != nil {
-		return err
-	}
-	return nil
+	processCmd.Flags().StringP("output", "o", ".", "Output directory")
+	processCmd.Flags().StringP("format", "f", "", "Format")
+	_ = processCmd.MarkFlagRequired("format")
 }
