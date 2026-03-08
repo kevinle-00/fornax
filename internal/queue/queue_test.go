@@ -4,10 +4,13 @@ package queue_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/kevinle-00/fornax/internal/job"
 	"github.com/kevinle-00/fornax/internal/queue"
 )
+
+// mockJob implements job.Job.
 
 type mockJob struct {
 	id     string
@@ -72,6 +75,136 @@ func TestEnqueue(t *testing.T) {
 			count := len(jobsSlice)
 			if count != tt.expectedLen {
 				t.Errorf("expected %d job, got %d", tt.jobCount, count)
+			}
+		})
+	}
+}
+
+func TestDequeue(t *testing.T) {
+	tests := []struct {
+		name     string
+		capacity int
+		jobCount int
+		wantOK   bool
+	}{
+		{
+			name:     "Dequeue with jobs in queue",
+			capacity: 10,
+			jobCount: 5,
+			wantOK:   true,
+		},
+		{
+			name:     "Dequeue with no jobs in queue",
+			capacity: 10,
+			jobCount: 0,
+			wantOK:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			queue := queue.NewJobQueue(tt.capacity)
+			job := &mockJob{id: "1"}
+
+			for i := 0; i < tt.jobCount; i++ {
+				err := queue.Enqueue(job)
+				if err != nil {
+					t.Errorf("Failed to enqueue job")
+					return
+				}
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			_, ok := queue.Dequeue(ctx)
+			if ok != tt.wantOK {
+				t.Errorf("Dequeue expected %t, got %t", tt.wantOK, ok)
+			}
+		})
+	}
+}
+
+func TestClose(t *testing.T) {
+	tests := []struct {
+		name     string
+		capacity int
+		jobCount int
+	}{
+		{
+			name:     "Dequeue returns false after Close",
+			capacity: 10,
+			jobCount: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q := queue.NewJobQueue(tt.capacity)
+			job := &mockJob{id: "1"}
+
+			for i := 0; i < tt.jobCount; i++ {
+				err := q.Enqueue(job)
+				if err != nil {
+					t.Errorf("Failed to enqueue job")
+					return
+				}
+			}
+
+			q.Close()
+
+			for {
+				ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+				_, ok := q.Dequeue(ctx)
+				cancel()
+				if !ok {
+					break
+				}
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			_, ok := q.Dequeue(ctx)
+			if ok {
+				t.Errorf("Dequeue after Close expected false, got true")
+			}
+		})
+	}
+}
+
+func TestGetJobsReturnsCopy(t *testing.T) {
+	tests := []struct {
+		name        string
+		capacity    int
+		jobCount    int
+		expectedLen int
+	}{
+		{
+			name:        "Appending to returned slice does not affect internal state",
+			capacity:    10,
+			jobCount:    3,
+			expectedLen: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q := queue.NewJobQueue(tt.capacity)
+			job := &mockJob{id: "1"}
+
+			for i := 0; i < tt.jobCount; i++ {
+				err := q.Enqueue(job)
+				if err != nil {
+					t.Errorf("Failed to enqueue job")
+					return
+				}
+			}
+
+			jobs := q.GetJobs()
+			_ = append(jobs, &mockJob{id: "extra"})
+
+			jobsAgain := q.GetJobs()
+			if len(jobsAgain) != tt.expectedLen {
+				t.Errorf("expected %d jobs, got %d", tt.expectedLen, len(jobsAgain))
 			}
 		})
 	}
