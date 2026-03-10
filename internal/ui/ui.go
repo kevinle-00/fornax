@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -16,11 +17,39 @@ const (
 	DashboardScreen Screen = "dashboard"
 )
 
+type inputStep struct {
+	key         string
+	placeholder string
+}
+
 type Model struct {
-	choices  []string
-	cursor   int
-	selected string
-	screen   Screen
+	choices       []string
+	cursor        int
+	selected      string
+	screen        Screen
+	input         textinput.Model
+	inputStep     int
+	commandInputs map[string]string
+}
+
+var stepDefinitions = map[string][]inputStep{
+	"Download": {
+		{key: "url", placeholder: "Enter URL..."},
+		{key: "output", placeholder: "Enter output directory path..."},
+		{key: "quality", placeholder: "Enter video quality..."},
+	},
+
+	"Encode": {
+		{key: "input", placeholder: "Enter input file path..."},
+		{key: "output", placeholder: "Enter output directory path..."},
+	},
+
+	"Process": {
+		{key: "url", placeholder: "Enter URL..."},
+		{key: "output", placeholder: "Enter output directory path..."},
+		{key: "format", placeholder: "Enter media format..."},
+		{key: "quality", placeholder: "Enter video quality..."},
+	},
 }
 
 func NewModel() Model {
@@ -53,12 +82,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				selected := m.choices[m.cursor]
 				m.selected = selected
 				m.screen = InputScreen
+				m.commandInputs = map[string]string{}
+				m.inputStep = 0
+				ti := textinput.New()
+				placeholder := stepDefinitions[m.selected][m.inputStep].placeholder
+				ti.Placeholder = placeholder
+				ti.Focus()
+				m.input = ti
 			}
 		case InputScreen:
+
 			switch msg.String() {
-			case "ctrl+c", "q":
+			case "ctrl+c":
 				return m, tea.Quit
+			case "enter":
+				currentStep := stepDefinitions[m.selected][m.inputStep]
+				m.commandInputs[currentStep.key] = m.input.Value()
+				m.inputStep++
+				if m.inputStep == len(stepDefinitions[m.selected]) {
+					m.screen = MenuScreen
+				} else {
+					m.input.SetValue("")
+					newPlaceholder := stepDefinitions[m.selected][m.inputStep].placeholder
+					m.input.Placeholder = newPlaceholder
+				}
+				return m, nil
 			}
+
+			var cmd tea.Cmd
+			m.input, cmd = m.input.Update(msg)
+			return m, cmd
 		}
 	}
 	return m, nil
@@ -92,21 +145,18 @@ func (m Model) viewMenu() string {
 }
 
 func (m Model) viewInput() string {
-	var s string
+	var s strings.Builder
+	fmt.Fprintf(&s, "\n%s Input Menu\n\n", m.selected)
 
-	switch m.selected {
-	case "Download":
-		s = "\nDownload Input Menu\n\n"
-		s += "URL: "
+	steps := stepDefinitions[m.selected]
 
-	case "Encode":
-		s = "\nEncode Input Menu\n\n"
-		s += "File: "
-
-	case "Process":
-		s = "\nProcess Input Menu\n\n"
-		s += "URL: "
+	for i, step := range steps {
+		if i < m.inputStep {
+			fmt.Fprintf(&s, "%s: %s\n", step.key, m.commandInputs[step.key])
+		} else if i == m.inputStep {
+			fmt.Fprintf(&s, "%s: %s\n", step.key, m.input.View())
+		}
 	}
 
-	return s
+	return s.String()
 }
