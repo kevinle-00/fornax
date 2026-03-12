@@ -30,8 +30,9 @@ type DownloadInputs struct {
 }
 
 type EncodeInputs struct {
-	InputPath  string
-	OutputPath string
+	InputPath       string
+	OutputDirectory string
+	Format          string
 }
 type ProcessInputs struct {
 	URL             string
@@ -115,7 +116,11 @@ type EncodeJob struct {
 
 func (e *EncodeJob) Execute(ctx context.Context) error {
 	e.SetStatus(StatusProcessing)
-	err := e.encoder.Encode(ctx, e.Inputs.InputPath, e.Inputs.OutputPath)
+	fileName := filepath.Base(e.Inputs.InputPath)
+	fileNameNoExt := strings.TrimSuffix(fileName, filepath.Ext(fileName))
+	outputPath := filepath.Join(e.Inputs.OutputDirectory, fileNameNoExt+"."+e.Inputs.Format)
+
+	err := e.encoder.Encode(ctx, e.Inputs.InputPath, outputPath)
 	if err != nil {
 		e.SetStatus(StatusFailed)
 		e.SetError(err)

@@ -3,6 +3,7 @@ package download
 
 import (
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,7 +44,8 @@ func (y *YtDlp) Download(ctx context.Context, url, outputPath, quality string) e
 	}
 	cmdArgs = append(cmdArgs, url)
 	cmd := exec.CommandContext(ctx, "yt-dlp", cmdArgs...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	// TODO: Capture into a buffer instead later to render progress in TUI
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
 	return cmd.Run()
 }

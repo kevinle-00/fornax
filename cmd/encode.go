@@ -4,9 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
-
 	"github.com/kevinle-00/fornax/internal/encode"
 	"github.com/kevinle-00/fornax/internal/job"
 	"github.com/kevinle-00/fornax/internal/queue"
@@ -40,14 +37,10 @@ var encodeCmd = &cobra.Command{
 				os.Exit(1)
 			}
 
-			inputBase := filepath.Base(inputPath)
-			inputExt := filepath.Ext(inputBase)
-			baseName := strings.TrimSuffix(inputBase, inputExt)
-			outputPath := filepath.Join(outputDirectory, baseName+"."+format)
-
 			encodeInputs := job.EncodeInputs{
-				InputPath:  inputPath,
-				OutputPath: outputPath,
+				InputPath:       inputPath,
+				OutputDirectory: outputDirectory,
+				Format:          format,
 			}
 			newJob := job.NewEncodeJob(encodeInputs, encoder)
 			if err := jobQueue.Enqueue(newJob); err != nil {

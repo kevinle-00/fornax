@@ -7,6 +7,10 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/kevinle-00/fornax/internal/download"
+	"github.com/kevinle-00/fornax/internal/encode"
+	"github.com/kevinle-00/fornax/internal/job"
+	"github.com/kevinle-00/fornax/internal/queue"
 )
 
 type Screen string
@@ -30,6 +34,9 @@ type Model struct {
 	input         textinput.Model
 	inputStep     int
 	commandInputs map[string]string
+	queue         *queue.JobQueue
+	downloader    download.Downloader
+	encoder       encode.Encoder
 }
 
 var stepDefinitions = map[string][]inputStep{
@@ -41,6 +48,7 @@ var stepDefinitions = map[string][]inputStep{
 
 	"Encode": {
 		{key: "input", placeholder: "Enter input file path..."},
+		{key: "format", placeholder: "Enter media format..."},
 		{key: "output", placeholder: "Enter output directory path..."},
 	},
 
@@ -52,10 +60,15 @@ var stepDefinitions = map[string][]inputStep{
 	},
 }
 
-func NewModel() Model {
-	return Model{choices: []string{
-		"Download", "Encode", "Process",
-	}, screen: MenuScreen}
+func NewModel(queue *queue.JobQueue, downloader download.Downloader, encoder encode.Encoder) Model {
+	return Model{
+		choices: []string{
+			"Download", "Encode", "Process",
+		}, screen: MenuScreen,
+		queue:      queue,
+		downloader: downloader,
+		encoder:    encoder,
+	}
 }
 
 func (m Model) Init() tea.Cmd {
@@ -100,7 +113,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.commandInputs[currentStep.key] = m.input.Value()
 				m.inputStep++
 				if m.inputStep == len(stepDefinitions[m.selected]) {
-					m.screen = MenuScreen
+					var newJob job.Job
+					switch m.selected {
+					case "Download":
+						inputs := job.DownloadInputs{
+							URL:             m.commandInputs["url"],
+							OutputDirectory: m.commandInputs["output"],
+							Quality:         m.commandInputs["quality"],
+						}
+						newJob = job.NewDownloadJob(inputs, m.downloader)
+
+					case "Encode":
+						inputs := job.EncodeInputs{
+							InputPath:  m.commandInputs["input"],
+							Format:     m.commandInputs["format"],
+							OutputDirectory: m.commandInputs["output"],
+						}
+						newJob = job.NewEncodeJob(inputs, m.encoder)
+
+					case "Process":
+						inputs := job.ProcessInputs{
+							URL:             m.commandInputs["url"],
+							OutputDirectory: m.commandInputs["output"],
+							Format:          m.commandInputs["format"],
+							Quality:         m.commandInputs["quality"],
+						}
+						newJob = job.NewProcessJob(inputs, m.downloader, m.encoder)
+					}
+
+					if err := m.queue.Enqueue(newJob); err != nil {
+						// TODO: add error UI
+						return m, tea.Quit
+					}
+					m.screen = DashboardScreen
 				} else {
 					m.input.SetValue("")
 					newPlaceholder := stepDefinitions[m.selected][m.inputStep].placeholder
@@ -112,6 +157,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			m.input, cmd = m.input.Update(msg)
 			return m, cmd
+
+		case DashboardScreen:
+			switch msg.String() {
+			case "ctrl+c", "q":
+				return m, tea.Quit
+			}
 		}
 	}
 	return m, nil
@@ -124,7 +175,11 @@ func (m Model) View() string {
 
 	case InputScreen:
 		return m.viewInput()
+
+	case DashboardScreen:
+		return m.viewDashboard()
 	}
+
 	return ""
 }
 
@@ -158,5 +213,11 @@ func (m Model) viewInput() string {
 		}
 	}
 
+	return s.String()
+}
+
+func (m Model) viewDashboard() string {
+	var s strings.Builder
+	s.WriteString("Done!")
 	return s.String()
 }
