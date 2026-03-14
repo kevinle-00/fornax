@@ -142,8 +142,9 @@ func TestEncodeJob_Execute(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ej := job.NewEncodeJob(job.EncodeInputs{
-				InputPath:  "/tmp/input.mp4",
-				OutputPath: "/tmp/output.mp3",
+				InputPath:       "/tmp/input.mp4",
+				OutputDirectory: "/tmp",
+				Format:          "mp3",
 			}, &mockEncoder{err: tt.encErr})
 
 			if got := ej.GetStatus(); got != job.StatusPending {
