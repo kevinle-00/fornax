@@ -4,6 +4,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -125,8 +126,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					case "Encode":
 						inputs := job.EncodeInputs{
-							InputPath:  m.commandInputs["input"],
-							Format:     m.commandInputs["format"],
+							InputPath:       m.commandInputs["input"],
+							Format:          m.commandInputs["format"],
 							OutputDirectory: m.commandInputs["output"],
 						}
 						newJob = job.NewEncodeJob(inputs, m.encoder)
@@ -146,6 +147,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return m, tea.Quit
 					}
 					m.screen = DashboardScreen
+					return m, tickCmd()
 				} else {
 					m.input.SetValue("")
 					newPlaceholder := stepDefinitions[m.selected][m.inputStep].placeholder
@@ -164,6 +166,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 		}
+
+	case tickMsg:
+		return m, tickCmd()
 	}
 	return m, nil
 }
@@ -218,6 +223,20 @@ func (m Model) viewInput() string {
 
 func (m Model) viewDashboard() string {
 	var s strings.Builder
-	s.WriteString("Done!")
+	s.WriteString("\nFornax Dashboard\n\n")
+
+	jobs := m.queue.GetJobs()
+	for _, job := range jobs {
+		fmt.Fprintf(&s, "Job: %s\nStatus: %s\n", job.GetID(), job.GetStatus())
+	}
 	return s.String()
+}
+
+type tickMsg time.Time
+
+// Sends a tickMsg after a delay
+func tickCmd() tea.Cmd {
+	return tea.Tick(500*time.Millisecond, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
 }
