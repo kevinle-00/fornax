@@ -76,90 +76,102 @@ func (m Model) Init() tea.Cmd {
 	return nil
 }
 
+func updateMenuScreen(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c", "q":
+		return m, tea.Quit
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+	case "down", "j":
+		if m.cursor < len(m.choices)-1 {
+			m.cursor++
+		}
+	case "enter", "space", "l":
+		selected := m.choices[m.cursor]
+		m.selected = selected
+		m.screen = InputScreen
+		m.commandInputs = map[string]string{}
+		m.inputStep = 0
+		ti := textinput.New()
+		placeholder := stepDefinitions[m.selected][m.inputStep].placeholder
+		ti.Placeholder = placeholder
+		ti.Focus()
+		m.input = ti
+	}
+	return m, nil
+}
+
+func createJob(m Model) job.Job {
+	var newJob job.Job
+	switch m.selected {
+	case "Download":
+		inputs := job.DownloadInputs{
+			URL:             m.commandInputs["url"],
+			OutputDirectory: m.commandInputs["output"],
+			Quality:         m.commandInputs["quality"],
+		}
+		newJob = job.NewDownloadJob(inputs, m.downloader)
+
+	case "Encode":
+		inputs := job.EncodeInputs{
+			InputPath:       m.commandInputs["input"],
+			Format:          m.commandInputs["format"],
+			OutputDirectory: m.commandInputs["output"],
+		}
+		newJob = job.NewEncodeJob(inputs, m.encoder)
+
+	case "Process":
+		inputs := job.ProcessInputs{
+			URL:             m.commandInputs["url"],
+			OutputDirectory: m.commandInputs["output"],
+			Format:          m.commandInputs["format"],
+			Quality:         m.commandInputs["quality"],
+		}
+		newJob = job.NewProcessJob(inputs, m.downloader, m.encoder)
+	}
+	return newJob
+}
+
+func updateInputScreen(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "enter":
+		currentStep := stepDefinitions[m.selected][m.inputStep]
+		m.commandInputs[currentStep.key] = m.input.Value()
+		m.inputStep++
+
+		if m.inputStep == len(stepDefinitions[m.selected]) {
+			newJob := createJob(m)
+			if err := m.queue.Enqueue(newJob); err != nil {
+				// TODO: add error UI
+				return m, tea.Quit
+			}
+			m.screen = DashboardScreen
+			return m, tickCmd()
+		} else {
+			m.input.SetValue("")
+			newPlaceholder := stepDefinitions[m.selected][m.inputStep].placeholder
+			m.input.Placeholder = newPlaceholder
+		}
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.input, cmd = m.input.Update(msg)
+	return m, cmd
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch m.screen {
 		case MenuScreen:
-			switch msg.String() {
-			case "ctrl+c", "q":
-				return m, tea.Quit
-			case "up", "k":
-				if m.cursor > 0 {
-					m.cursor--
-				}
-			case "down", "j":
-				if m.cursor < len(m.choices)-1 {
-					m.cursor++
-				}
-			case "enter", "space", "l":
-				selected := m.choices[m.cursor]
-				m.selected = selected
-				m.screen = InputScreen
-				m.commandInputs = map[string]string{}
-				m.inputStep = 0
-				ti := textinput.New()
-				placeholder := stepDefinitions[m.selected][m.inputStep].placeholder
-				ti.Placeholder = placeholder
-				ti.Focus()
-				m.input = ti
-			}
+			return updateMenuScreen(m, msg)
 		case InputScreen:
-
-			switch msg.String() {
-			case "ctrl+c":
-				return m, tea.Quit
-			case "enter":
-				currentStep := stepDefinitions[m.selected][m.inputStep]
-				m.commandInputs[currentStep.key] = m.input.Value()
-				m.inputStep++
-				if m.inputStep == len(stepDefinitions[m.selected]) {
-					var newJob job.Job
-					switch m.selected {
-					case "Download":
-						inputs := job.DownloadInputs{
-							URL:             m.commandInputs["url"],
-							OutputDirectory: m.commandInputs["output"],
-							Quality:         m.commandInputs["quality"],
-						}
-						newJob = job.NewDownloadJob(inputs, m.downloader)
-
-					case "Encode":
-						inputs := job.EncodeInputs{
-							InputPath:       m.commandInputs["input"],
-							Format:          m.commandInputs["format"],
-							OutputDirectory: m.commandInputs["output"],
-						}
-						newJob = job.NewEncodeJob(inputs, m.encoder)
-
-					case "Process":
-						inputs := job.ProcessInputs{
-							URL:             m.commandInputs["url"],
-							OutputDirectory: m.commandInputs["output"],
-							Format:          m.commandInputs["format"],
-							Quality:         m.commandInputs["quality"],
-						}
-						newJob = job.NewProcessJob(inputs, m.downloader, m.encoder)
-					}
-
-					if err := m.queue.Enqueue(newJob); err != nil {
-						// TODO: add error UI
-						return m, tea.Quit
-					}
-					m.screen = DashboardScreen
-					return m, tickCmd()
-				} else {
-					m.input.SetValue("")
-					newPlaceholder := stepDefinitions[m.selected][m.inputStep].placeholder
-					m.input.Placeholder = newPlaceholder
-				}
-				return m, nil
-			}
-
-			var cmd tea.Cmd
-			m.input, cmd = m.input.Update(msg)
-			return m, cmd
-
+			return updateInputScreen(m, msg)
 		case DashboardScreen:
 			switch msg.String() {
 			case "ctrl+c", "q":
