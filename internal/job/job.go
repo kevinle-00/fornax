@@ -1,4 +1,4 @@
-// Package job contains job struct
+// Package job defines the job types used by the worker system
 package job
 
 import (
@@ -23,63 +23,52 @@ const (
 	StatusFailed     Status = "failed"
 )
 
+type Job interface {
+	Execute(ctx context.Context) error
+	ID() string
+	Status() Status
+}
+
+type BaseJob struct {
+	id string
+
+	mu     sync.Mutex
+	status Status
+	err    error
+}
+
+func (b *BaseJob) ID() string {
+	return b.id
+}
+
+func (b *BaseJob) Status() Status {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.status
+}
+
+func (b *BaseJob) setStatus(s Status) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.status = s
+}
+
+func (b *BaseJob) Error() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.err
+}
+
+func (b *BaseJob) setError(e error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.err = e
+}
+
 type DownloadInputs struct {
 	URL             string
 	OutputDirectory string
 	Quality         string
-}
-
-type EncodeInputs struct {
-	InputPath       string
-	OutputDirectory string
-	Format          string
-}
-type ProcessInputs struct {
-	URL             string
-	OutputDirectory string
-	Format          string
-	Quality         string
-}
-
-type Job interface {
-	Execute(ctx context.Context) error
-	GetID() string
-	GetStatus() Status
-}
-
-type BaseJob struct {
-	ID     string
-	Status Status
-	Error  error
-	mu     sync.Mutex
-}
-
-func (b *BaseJob) GetID() string {
-	return b.ID
-}
-
-func (b *BaseJob) GetStatus() Status {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.Status
-}
-
-func (b *BaseJob) SetStatus(s Status) {
-	b.mu.Lock()
-	b.Status = s
-	b.mu.Unlock()
-}
-
-func (b *BaseJob) GetError() error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.Error
-}
-
-func (b *BaseJob) SetError(e error) {
-	b.mu.Lock()
-	b.Error = e
-	b.mu.Unlock()
 }
 
 type DownloadJob struct {
@@ -88,24 +77,36 @@ type DownloadJob struct {
 	downloader download.Downloader
 }
 
-func (d *DownloadJob) Execute(ctx context.Context) error {
-	d.SetStatus(StatusProcessing)
-	err := d.downloader.Download(ctx, d.Inputs.URL, d.Inputs.OutputDirectory, d.Inputs.Quality)
-	if err != nil {
-		d.SetStatus(StatusFailed)
-		d.SetError(err)
-		return err
-	}
-	d.SetStatus(StatusDone)
-	return nil
-}
-
 func NewDownloadJob(inputs DownloadInputs, downloader download.Downloader) *DownloadJob {
 	return &DownloadJob{
-		BaseJob:    BaseJob{ID: uuid.New().String(), Status: StatusPending},
+		BaseJob:    BaseJob{id: uuid.New().String(), status: StatusPending},
 		Inputs:     inputs,
 		downloader: downloader,
 	}
+}
+
+func (d *DownloadJob) Execute(ctx context.Context) error {
+	d.setStatus(StatusProcessing)
+	err := d.downloader.Download(ctx, d.Inputs.URL, d.Inputs.OutputDirectory, d.Inputs.Quality)
+	if err != nil {
+		d.setStatus(StatusFailed)
+		d.setError(err)
+		return err
+	}
+	d.setStatus(StatusDone)
+	return nil
+}
+
+type EncodeInputs struct {
+	InputPath       string
+	OutputDirectory string
+	Format          string
+}
+
+func (e EncodeInputs) outputPath() string {
+	fileName := filepath.Base(e.InputPath)
+	fileNameNoExt := strings.TrimSuffix(fileName, filepath.Ext(fileName))
+	return filepath.Join(e.OutputDirectory, fileNameNoExt+"."+e.Format)
 }
 
 type EncodeJob struct {
@@ -114,29 +115,33 @@ type EncodeJob struct {
 	encoder encode.Encoder
 }
 
-func (e *EncodeJob) Execute(ctx context.Context) error {
-	e.SetStatus(StatusProcessing)
-	fileName := filepath.Base(e.Inputs.InputPath)
-	fileNameNoExt := strings.TrimSuffix(fileName, filepath.Ext(fileName))
-	outputPath := filepath.Join(e.Inputs.OutputDirectory, fileNameNoExt+"."+e.Inputs.Format)
-
-	err := e.encoder.Encode(ctx, e.Inputs.InputPath, outputPath)
-	if err != nil {
-		e.SetStatus(StatusFailed)
-		e.SetError(err)
-
-		return err
-	}
-	e.SetStatus(StatusDone)
-	return nil
-}
-
 func NewEncodeJob(inputs EncodeInputs, encoder encode.Encoder) *EncodeJob {
 	return &EncodeJob{
-		BaseJob: BaseJob{ID: uuid.New().String(), Status: StatusPending},
+		BaseJob: BaseJob{id: uuid.New().String(), status: StatusPending},
 		Inputs:  inputs,
 		encoder: encoder,
 	}
+}
+
+func (e *EncodeJob) Execute(ctx context.Context) error {
+	e.setStatus(StatusProcessing)
+
+	err := e.encoder.Encode(ctx, e.Inputs.InputPath, e.Inputs.outputPath())
+	if err != nil {
+		e.setStatus(StatusFailed)
+		e.setError(err)
+
+		return err
+	}
+	e.setStatus(StatusDone)
+	return nil
+}
+
+type ProcessInputs struct {
+	URL             string
+	OutputDirectory string
+	Format          string
+	Quality         string
 }
 
 type ProcessJob struct {
@@ -146,30 +151,40 @@ type ProcessJob struct {
 	encoder    encode.Encoder
 }
 
-func (p *ProcessJob) Execute(ctx context.Context) error {
-	p.SetStatus(StatusProcessing)
+func NewProcessJob(inputs ProcessInputs, downloader download.Downloader, encoder encode.Encoder) *ProcessJob {
+	return &ProcessJob{
+		BaseJob:    BaseJob{id: uuid.New().String(), status: StatusPending},
+		Inputs:     inputs,
+		downloader: downloader,
+		encoder:    encoder,
+	}
+}
 
-	tempPrefix := "/tmp/fornax-" + p.ID
+func (p *ProcessJob) Execute(ctx context.Context) error {
+	p.setStatus(StatusProcessing)
+
+	tempPrefix := filepath.Join(os.TempDir(), "fornax-"+p.id)
 	downloadTemplate := tempPrefix + "-%(title)s.%(ext)s"
 
 	if err := p.downloader.Download(ctx, p.Inputs.URL, downloadTemplate, p.Inputs.Quality); err != nil {
-		p.SetStatus(StatusFailed)
-		p.SetError(err)
+		p.setStatus(StatusFailed)
+		p.setError(err)
 
-		return p.GetError()
+		return err
 	}
 
 	files, err := filepath.Glob(tempPrefix + "-*.*")
 	if err != nil {
-		p.SetStatus(StatusFailed)
-		p.SetError(err)
+		p.setStatus(StatusFailed)
+		p.setError(err)
 
 		return err
 	}
 	if len(files) == 0 {
-		p.SetStatus(StatusFailed)
-		p.SetError(errors.New("could not find downloaded file in /tmp"))
-		return p.GetError()
+		err := errors.New("could not find downloaded file in temp directory")
+		p.setStatus(StatusFailed)
+		p.setError(err)
+		return err
 	}
 
 	downloadedFile := files[0]
@@ -178,25 +193,16 @@ func (p *ProcessJob) Execute(ctx context.Context) error {
 	fileName := filepath.Base(downloadedFile)
 	fileExt := filepath.Ext(fileName)
 	fileNameNoExt := strings.TrimSuffix(fileName, fileExt)
-	videoTitle := strings.TrimPrefix(fileNameNoExt, "fornax-"+p.ID+"-")
+	videoTitle := strings.TrimPrefix(fileNameNoExt, "fornax-"+p.id+"-")
 	outputPath := filepath.Join(p.Inputs.OutputDirectory, videoTitle+"."+p.Inputs.Format)
 
 	if err := p.encoder.Encode(ctx, downloadedFile, outputPath); err != nil {
-		p.SetStatus(StatusFailed)
-		p.SetError(err)
+		p.setStatus(StatusFailed)
+		p.setError(err)
 
-		return p.GetError()
+		return err
 	}
 
-	p.SetStatus(StatusDone)
+	p.setStatus(StatusDone)
 	return nil
-}
-
-func NewProcessJob(inputs ProcessInputs, downloader download.Downloader, encoder encode.Encoder) *ProcessJob {
-	return &ProcessJob{
-		BaseJob:    BaseJob{ID: uuid.New().String(), Status: StatusPending},
-		Inputs:     inputs,
-		downloader: downloader,
-		encoder:    encoder,
-	}
 }

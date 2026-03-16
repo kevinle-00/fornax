@@ -40,11 +40,11 @@ func (m *mockJob) Execute(ctx context.Context) error {
 	return m.execErr
 }
 
-func (m *mockJob) GetID() string {
+func (m *mockJob) ID() string {
 	return m.id
 }
 
-func (m *mockJob) GetStatus() job.Status {
+func (m *mockJob) Status() job.Status {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.status
@@ -68,19 +68,17 @@ func TestWorkerPoolProcessesJobs(t *testing.T) {
 	}
 
 	pool := worker.NewWorkerPool(q, 3)
-	if err := pool.Start(context.Background()); err != nil {
-		t.Fatalf("failed to start pool: %v", err)
-	}
+	pool.Start(context.Background())
 
 	q.Close()
 	pool.Stop()
 
 	for _, j := range jobs {
 		if !j.wasExecuted() {
-			t.Errorf("job %s was not executed", j.GetID())
+			t.Errorf("job %s was not executed", j.ID())
 		}
-		if j.GetStatus() != job.StatusDone {
-			t.Errorf("job %s has status %s, want %s", j.GetID(), j.GetStatus(), job.StatusDone)
+		if j.Status() != job.StatusDone {
+			t.Errorf("job %s has status %s, want %s", j.ID(), j.Status(), job.StatusDone)
 		}
 	}
 }
@@ -99,9 +97,7 @@ func TestWorkerPoolHandlesFailedJobs(t *testing.T) {
 	}
 
 	pool := worker.NewWorkerPool(q, 2)
-	if err := pool.Start(context.Background()); err != nil {
-		t.Fatalf("failed to start pool: %v", err)
-	}
+	pool.Start(context.Background())
 
 	q.Close()
 	pool.Stop()
@@ -116,14 +112,14 @@ func TestWorkerPoolHandlesFailedJobs(t *testing.T) {
 		t.Error("good-2 was not executed")
 	}
 
-	if goodJob1.GetStatus() != job.StatusDone {
-		t.Errorf("good-1 has status %s, want %s", goodJob1.GetStatus(), job.StatusDone)
+	if goodJob1.Status() != job.StatusDone {
+		t.Errorf("good-1 has status %s, want %s", goodJob1.Status(), job.StatusDone)
 	}
-	if failJob.GetStatus() != job.StatusFailed {
-		t.Errorf("fail-1 has status %s, want %s", failJob.GetStatus(), job.StatusFailed)
+	if failJob.Status() != job.StatusFailed {
+		t.Errorf("fail-1 has status %s, want %s", failJob.Status(), job.StatusFailed)
 	}
-	if goodJob2.GetStatus() != job.StatusDone {
-		t.Errorf("good-2 has status %s, want %s", goodJob2.GetStatus(), job.StatusDone)
+	if goodJob2.Status() != job.StatusDone {
+		t.Errorf("good-2 has status %s, want %s", goodJob2.Status(), job.StatusDone)
 	}
 }
 
@@ -133,9 +129,7 @@ func TestWorkerPoolRespectsContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	pool := worker.NewWorkerPool(q, 2)
-	if err := pool.Start(ctx); err != nil {
-		t.Fatalf("failed to start pool: %v", err)
-	}
+	pool.Start(ctx)
 
 	cancel()
 

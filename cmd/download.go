@@ -55,10 +55,7 @@ var downloadCmd = &cobra.Command{
 		// Close the queue so workers dont block waiting for more work
 		jobQueue.Close()
 
-		if err := workerPool.Start(context.Background()); err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
-		}
+		workerPool.Start(context.Background())
 
 		workerPool.Stop()
 	},

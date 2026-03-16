@@ -22,11 +22,11 @@ func (m *mockJob) Execute(ctx context.Context) error {
 	return nil
 }
 
-func (m *mockJob) GetID() string {
+func (m *mockJob) ID() string {
 	return m.id
 }
 
-func (m *mockJob) GetStatus() job.Status {
+func (m *mockJob) Status() job.Status {
 	return m.status
 }
 

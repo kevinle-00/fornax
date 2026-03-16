@@ -26,43 +26,16 @@ func (m *mockEncoder) Encode(ctx context.Context, inputPath, outputPath string) 
 	return m.err
 }
 
-func TestBaseJob_GetID(t *testing.T) {
+func TestBaseJob_ID(t *testing.T) {
 	dl := job.NewDownloadJob(job.DownloadInputs{
 		URL:             "https://example.com/video",
 		OutputDirectory: "/tmp",
 		Quality:         "best",
 	}, &mockDownloader{})
 
-	id := dl.GetID()
+	id := dl.ID()
 	if id == "" {
 		t.Error("expected non-empty ID, got empty string")
-	}
-}
-
-func TestBaseJob_SetStatusGetStatus(t *testing.T) {
-	dl := job.NewDownloadJob(job.DownloadInputs{}, &mockDownloader{})
-
-	if got := dl.GetStatus(); got != job.StatusPending {
-		t.Errorf("expected status %q, got %q", job.StatusPending, got)
-	}
-
-	dl.SetStatus(job.StatusProcessing)
-	if got := dl.GetStatus(); got != job.StatusProcessing {
-		t.Errorf("expected status %q, got %q", job.StatusProcessing, got)
-	}
-}
-
-func TestBaseJob_SetErrorGetError(t *testing.T) {
-	dl := job.NewDownloadJob(job.DownloadInputs{}, &mockDownloader{})
-
-	if got := dl.GetError(); got != nil {
-		t.Errorf("expected nil error, got %v", got)
-	}
-
-	want := errors.New("something went wrong")
-	dl.SetError(want)
-	if got := dl.GetError(); got != want {
-		t.Errorf("expected error %v, got %v", want, got)
 	}
 }
 
@@ -95,7 +68,7 @@ func TestDownloadJob_Execute(t *testing.T) {
 				Quality:         "best",
 			}, &mockDownloader{err: tt.dlErr})
 
-			if got := dj.GetStatus(); got != job.StatusPending {
+			if got := dj.Status(); got != job.StatusPending {
 				t.Fatalf("expected initial status %q, got %q", job.StatusPending, got)
 			}
 
@@ -105,13 +78,13 @@ func TestDownloadJob_Execute(t *testing.T) {
 				t.Errorf("expected error=%v, got %v", tt.wantErr, err)
 			}
 
-			if got := dj.GetStatus(); got != tt.expectedStatus {
+			if got := dj.Status(); got != tt.expectedStatus {
 				t.Errorf("expected status %q, got %q", tt.expectedStatus, got)
 			}
 
 			if tt.wantErr {
-				if got := dj.GetError(); got == nil {
-					t.Error("expected non-nil error from GetError, got nil")
+				if got := dj.Error(); got == nil {
+					t.Error("expected non-nil error from Error, got nil")
 				}
 			}
 		})
@@ -147,7 +120,7 @@ func TestEncodeJob_Execute(t *testing.T) {
 				Format:          "mp3",
 			}, &mockEncoder{err: tt.encErr})
 
-			if got := ej.GetStatus(); got != job.StatusPending {
+			if got := ej.Status(); got != job.StatusPending {
 				t.Fatalf("expected initial status %q, got %q", job.StatusPending, got)
 			}
 
@@ -157,13 +130,13 @@ func TestEncodeJob_Execute(t *testing.T) {
 				t.Errorf("expected error=%v, got %v", tt.wantErr, err)
 			}
 
-			if got := ej.GetStatus(); got != tt.expectedStatus {
+			if got := ej.Status(); got != tt.expectedStatus {
 				t.Errorf("expected status %q, got %q", tt.expectedStatus, got)
 			}
 
 			if tt.wantErr {
-				if got := ej.GetError(); got == nil {
-					t.Error("expected non-nil error from GetError, got nil")
+				if got := ej.Error(); got == nil {
+					t.Error("expected non-nil error from Error, got nil")
 				}
 			}
 		})

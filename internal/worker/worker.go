@@ -1,9 +1,8 @@
-// Package worker
+// Package worker provides a concurrent job processing pool
 package worker
 
 import (
 	"context"
-	"log"
 	"sync"
 
 	"github.com/kevinle-00/fornax/internal/queue"
@@ -15,19 +14,14 @@ type WorkerPool struct {
 	wg    sync.WaitGroup
 }
 
-type Pool interface {
-	Start(ctx context.Context) error
-	Stop()
-}
-
-func NewWorkerPool(queue *queue.JobQueue, count int) *WorkerPool {
+func NewWorkerPool(q *queue.JobQueue, count int) *WorkerPool {
 	return &WorkerPool{
-		queue: queue,
+		queue: q,
 		count: count,
 	}
 }
 
-func (w *WorkerPool) Start(ctx context.Context) error {
+func (w *WorkerPool) Start(ctx context.Context) {
 	for i := 0; i < w.count; i++ {
 		w.wg.Go(func() {
 			for {
@@ -37,14 +31,11 @@ func (w *WorkerPool) Start(ctx context.Context) error {
 					return
 				}
 
-				if err := job.Execute(ctx); err != nil {
-					log.Printf("job %s failed: %v", job.GetID(), err)
-				}
-
+				// error is stored on the job via setError; callers retrieve it via job.Error()
+				_ = job.Execute(ctx)
 			}
 		})
 	}
-	return nil
 }
 
 func (w *WorkerPool) Stop() {

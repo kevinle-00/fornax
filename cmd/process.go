@@ -54,10 +54,7 @@ var processCmd = &cobra.Command{
 		}
 		jobQueue.Close()
 		workerPool := worker.NewWorkerPool(jobQueue, 5)
-		if err := workerPool.Start(context.Background()); err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
-		}
+		workerPool.Start(context.Background())
 
 		workerPool.Stop()
 	},

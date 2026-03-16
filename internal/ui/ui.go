@@ -239,7 +239,7 @@ func (m Model) viewDashboard() string {
 
 	jobs := m.queue.GetJobs()
 	for _, job := range jobs {
-		fmt.Fprintf(&s, "Job: %s\nStatus: %s\n", job.GetID(), job.GetStatus())
+		fmt.Fprintf(&s, "Job: %s\nStatus: %s\n", job.ID(), job.Status())
 	}
 	return s.String()
 }

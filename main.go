@@ -22,10 +22,7 @@ func main() {
 	defer workerPool.Stop()
 	defer queue.Close()
 
-	if err := workerPool.Start(context.Background()); err != nil {
-		fmt.Println("Error:", err)
-		os.Exit(1)
-	}
+	workerPool.Start(context.Background())
 
 	if _, err := tea.NewProgram(ui.NewModel(queue, downloader, encoder)).Run(); err != nil {
 		fmt.Println("Error:", err)
