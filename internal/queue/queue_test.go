@@ -56,7 +56,7 @@ func TestEnqueue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			queue := queue.NewJobQueue(tt.capacity)
+			queue := queue.New(tt.capacity)
 			job := &mockJob{id: "1"}
 
 			for i := 0; i < tt.jobCount; i++ {
@@ -71,7 +71,7 @@ func TestEnqueue(t *testing.T) {
 
 			}
 
-			jobsSlice := queue.GetJobs()
+			jobsSlice := queue.Jobs()
 			count := len(jobsSlice)
 			if count != tt.expectedLen {
 				t.Errorf("expected %d job, got %d", tt.jobCount, count)
@@ -103,7 +103,7 @@ func TestDequeue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			queue := queue.NewJobQueue(tt.capacity)
+			queue := queue.New(tt.capacity)
 			job := &mockJob{id: "1"}
 
 			for i := 0; i < tt.jobCount; i++ {
@@ -139,7 +139,7 @@ func TestClose(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			q := queue.NewJobQueue(tt.capacity)
+			q := queue.New(tt.capacity)
 			job := &mockJob{id: "1"}
 
 			for i := 0; i < tt.jobCount; i++ {
@@ -171,7 +171,7 @@ func TestClose(t *testing.T) {
 	}
 }
 
-func TestGetJobsReturnsCopy(t *testing.T) {
+func TestJobsReturnsCopy(t *testing.T) {
 	tests := []struct {
 		name        string
 		capacity    int
@@ -188,7 +188,7 @@ func TestGetJobsReturnsCopy(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			q := queue.NewJobQueue(tt.capacity)
+			q := queue.New(tt.capacity)
 			job := &mockJob{id: "1"}
 
 			for i := 0; i < tt.jobCount; i++ {
@@ -199,10 +199,10 @@ func TestGetJobsReturnsCopy(t *testing.T) {
 				}
 			}
 
-			jobs := q.GetJobs()
+			jobs := q.Jobs()
 			_ = append(jobs, &mockJob{id: "extra"})
 
-			jobsAgain := q.GetJobs()
+			jobsAgain := q.Jobs()
 			if len(jobsAgain) != tt.expectedLen {
 				t.Errorf("expected %d jobs, got %d", tt.expectedLen, len(jobsAgain))
 			}

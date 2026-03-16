@@ -17,7 +17,7 @@ import (
 func main() {
 	downloader := download.New()
 	encoder := encode.New()
-	queue := queue.NewJobQueue(10)
+	queue := queue.New(10)
 	workerPool := worker.NewWorkerPool(queue, 5)
 	defer workerPool.Stop()
 	defer queue.Close()

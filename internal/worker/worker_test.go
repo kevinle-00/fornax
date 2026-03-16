@@ -57,7 +57,7 @@ func (m *mockJob) wasExecuted() bool {
 }
 
 func TestWorkerPoolProcessesJobs(t *testing.T) {
-	q := queue.NewJobQueue(10)
+	q := queue.New(10)
 
 	jobs := make([]*mockJob, 5)
 	for i := range jobs {
@@ -84,7 +84,7 @@ func TestWorkerPoolProcessesJobs(t *testing.T) {
 }
 
 func TestWorkerPoolHandlesFailedJobs(t *testing.T) {
-	q := queue.NewJobQueue(10)
+	q := queue.New(10)
 
 	goodJob1 := newMockJob("good-1", nil)
 	failJob := newMockJob("fail-1", errors.New("something went wrong"))
@@ -124,7 +124,7 @@ func TestWorkerPoolHandlesFailedJobs(t *testing.T) {
 }
 
 func TestWorkerPoolRespectsContext(t *testing.T) {
-	q := queue.NewJobQueue(10)
+	q := queue.New(10)
 
 	ctx, cancel := context.WithCancel(context.Background())
 

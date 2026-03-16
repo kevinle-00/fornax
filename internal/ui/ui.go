@@ -35,7 +35,7 @@ type Model struct {
 	input         textinput.Model
 	inputStep     int
 	commandInputs map[string]string
-	queue         *queue.JobQueue
+	queue         *queue.Queue
 	downloader    download.Downloader
 	encoder       encode.Encoder
 }
@@ -61,7 +61,7 @@ var stepDefinitions = map[string][]inputStep{
 	},
 }
 
-func NewModel(queue *queue.JobQueue, downloader download.Downloader, encoder encode.Encoder) Model {
+func NewModel(queue *queue.Queue, downloader download.Downloader, encoder encode.Encoder) Model {
 	return Model{
 		choices: []string{
 			"Download", "Encode", "Process",
@@ -237,7 +237,7 @@ func (m Model) viewDashboard() string {
 	var s strings.Builder
 	s.WriteString("\nFornax Dashboard\n\n")
 
-	jobs := m.queue.GetJobs()
+	jobs := m.queue.Jobs()
 	for _, job := range jobs {
 		fmt.Fprintf(&s, "Job: %s\nStatus: %s\n", job.ID(), job.Status())
 	}

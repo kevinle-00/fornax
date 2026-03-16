@@ -30,7 +30,7 @@ var encodeCmd = &cobra.Command{
 		// TODO: Make encode manually cancellable by user
 
 		encoder := encode.New()
-		jobQueue := queue.NewJobQueue(10)
+		jobQueue := queue.New(10)
 		for _, inputPath := range args {
 			if err := validate.IsValidInputPath(inputPath); err != nil {
 				fmt.Println("Error:", err)

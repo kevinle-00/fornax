@@ -33,7 +33,7 @@ var processCmd = &cobra.Command{
 
 		encoder := encode.New()
 		downloader := download.New()
-		jobQueue := queue.NewJobQueue(10)
+		jobQueue := queue.New(10)
 		for _, url := range args {
 			if err := validate.IsValidURL(url); err != nil {
 				fmt.Println("Error:", err)

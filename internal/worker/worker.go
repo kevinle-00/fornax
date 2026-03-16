@@ -9,12 +9,12 @@ import (
 )
 
 type WorkerPool struct {
-	queue *queue.JobQueue
+	queue *queue.Queue
 	count int
 	wg    sync.WaitGroup
 }
 
-func NewWorkerPool(q *queue.JobQueue, count int) *WorkerPool {
+func NewWorkerPool(q *queue.Queue, count int) *WorkerPool {
 	return &WorkerPool{
 		queue: q,
 		count: count,

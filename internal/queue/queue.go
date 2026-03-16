@@ -1,49 +1,43 @@
-// Package queue
+// Package queue provides a bounded job queue for the worker pool.
 package queue
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 
 	"github.com/kevinle-00/fornax/internal/job"
 )
 
-type Queue interface {
-	Enqueue(job job.Job) error
-	Dequeue(ctx context.Context) (job.Job, bool)
-	GetJobs() []job.Job
-	Close()
-}
+var ErrQueueFull = errors.New("queue is full")
 
-type JobQueue struct {
+type Queue struct {
 	jobs chan job.Job
 	all  []job.Job
 	mu   sync.Mutex
 }
 
-func NewJobQueue(capacity int) *JobQueue {
-	return &JobQueue{
+func New(capacity int) *Queue {
+	return &Queue{
 		jobs: make(chan job.Job, capacity),
-		all:  []job.Job{},
 	}
 }
 
-func (j *JobQueue) Enqueue(job job.Job) error {
+func (q *Queue) Enqueue(job job.Job) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
 	select {
-	case j.jobs <- job:
-		j.mu.Lock()
-		j.all = append(j.all, job)
-		j.mu.Unlock()
+	case q.jobs <- job:
+		q.all = append(q.all, job)
 		return nil
 	default:
-		return fmt.Errorf("queue is full")
+		return ErrQueueFull
 	}
 }
 
-func (j *JobQueue) Dequeue(ctx context.Context) (job.Job, bool) {
+func (q *Queue) Dequeue(ctx context.Context) (job.Job, bool) {
 	select {
-	case job, ok := <-j.jobs:
+	case job, ok := <-q.jobs:
 		if !ok {
 			return nil, false
 		}
@@ -53,14 +47,14 @@ func (j *JobQueue) Dequeue(ctx context.Context) (job.Job, bool) {
 	}
 }
 
-func (j *JobQueue) GetJobs() []job.Job {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	allCopy := make([]job.Job, len(j.all))
-	copy(allCopy, j.all)
+func (q *Queue) Jobs() []job.Job {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	allCopy := make([]job.Job, len(q.all))
+	copy(allCopy, q.all)
 	return allCopy
 }
 
-func (j *JobQueue) Close() {
-	close(j.jobs)
+func (q *Queue) Close() {
+	close(q.jobs)
 }

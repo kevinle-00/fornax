@@ -34,7 +34,7 @@ var downloadCmd = &cobra.Command{
 		downloader := download.New()
 		// TODO: eventually make download cancellable by the user
 
-		jobQueue := queue.NewJobQueue(10)
+		jobQueue := queue.New(10)
 		workerPool := worker.NewWorkerPool(jobQueue, 5)
 		for _, url := range args {
 			if err := validate.IsValidURL(url); err != nil {
