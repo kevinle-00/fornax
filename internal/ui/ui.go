@@ -38,6 +38,7 @@ type Model struct {
 	queue         *queue.Queue
 	downloader    download.Downloader
 	encoder       encode.Encoder
+	dashCursor    int
 }
 
 var stepDefinitions = map[string][]inputStep{
@@ -173,10 +174,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case InputScreen:
 			return updateInputScreen(m, msg)
 		case DashboardScreen:
-			switch msg.String() {
-			case "ctrl+c", "q":
-				return m, tea.Quit
-			}
+			return updateDashboardScreen(m, msg)
 		}
 
 	case tickMsg:
@@ -233,13 +231,73 @@ func (m Model) viewInput() string {
 	return s.String()
 }
 
+func updateDashboardScreen(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
+	jobs := m.queue.Jobs()
+	switch msg.String() {
+	case "ctrl+c", "q":
+		return m, tea.Quit
+	case "up", "k":
+		if m.dashCursor > 0 {
+			m.dashCursor--
+		}
+	case "down", "j":
+		if m.dashCursor < len(jobs)-1 {
+			m.dashCursor++
+		}
+	case "m":
+		m.cursor = 0
+		m.screen = MenuScreen
+		return m, nil
+	case "r":
+		if len(jobs) > 0 {
+			selected := jobs[m.dashCursor]
+			if selected.Status() == job.StatusFailed {
+				newJob := selected.Requeue()
+				if err := m.queue.Enqueue(newJob); err != nil {
+					// TODO: add error UI
+					return m, tea.Quit
+				}
+			}
+		}
+	}
+	return m, nil
+}
+
 func (m Model) viewDashboard() string {
 	var s strings.Builder
-	s.WriteString("\nFornax Dashboard\n\n")
+	s.WriteString("\nFornax Dashboard (r: requeue failed | m: menu | q: quit)\n\n")
 
 	jobs := m.queue.Jobs()
-	for _, job := range jobs {
-		fmt.Fprintf(&s, "Job: %s\nStatus: %s\n", job.ID(), job.Status())
+	for i, j := range jobs {
+		cursor := " "
+		if i == m.dashCursor {
+			cursor = ">"
+		}
+
+		var jobType string
+		switch j.(type) {
+		case *job.DownloadJob:
+			jobType = "Download"
+		case *job.EncodeJob:
+			jobType = "Encode"
+		case *job.ProcessJob:
+			jobType = "Process"
+		}
+		jobLine := fmt.Sprintf("%s Job: %s | Type: %s | Status: %s", cursor, j.ID()[:8], jobType, j.Status())
+		fmt.Fprintf(&s, "%s\n", jobLine)
+
+		maxWidth := len(jobLine)
+
+		// TODO: need to make error messages useful for user
+		if j.Status() == job.StatusFailed {
+			errLine := fmt.Sprintf("  Error: %v", j.Error())
+			fmt.Fprintf(&s, "%s\n", errLine)
+			if len(errLine) > maxWidth {
+				maxWidth = len(errLine)
+			}
+		}
+
+		fmt.Fprintf(&s, "%s\n", strings.Repeat("─", maxWidth))
 	}
 	return s.String()
 }

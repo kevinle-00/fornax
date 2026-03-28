@@ -3,7 +3,7 @@ package encode
 
 import (
 	"context"
-	"os"
+	"io"
 	"os/exec"
 )
 
@@ -19,7 +19,7 @@ func New() *FFmpeg {
 
 func (f *FFmpeg) Encode(ctx context.Context, inputPath, outputPath string) error {
 	cmd := exec.CommandContext(ctx, "ffmpeg", "-i", inputPath, outputPath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
 	return cmd.Run()
 }

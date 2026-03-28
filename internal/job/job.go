@@ -27,6 +27,8 @@ type Job interface {
 	Execute(ctx context.Context) error
 	ID() string
 	Status() Status
+	Error() error
+	Requeue() Job
 }
 
 type BaseJob struct {
@@ -97,6 +99,10 @@ func (d *DownloadJob) Execute(ctx context.Context) error {
 	return nil
 }
 
+func (d *DownloadJob) Requeue() Job {
+	return NewDownloadJob(d.Inputs, d.downloader)
+}
+
 type EncodeInputs struct {
 	InputPath       string
 	OutputDirectory string
@@ -135,6 +141,10 @@ func (e *EncodeJob) Execute(ctx context.Context) error {
 	}
 	e.setStatus(StatusDone)
 	return nil
+}
+
+func (e *EncodeJob) Requeue() Job {
+	return NewEncodeJob(e.Inputs, e.encoder)
 }
 
 type ProcessInputs struct {
@@ -205,4 +215,8 @@ func (p *ProcessJob) Execute(ctx context.Context) error {
 
 	p.setStatus(StatusDone)
 	return nil
+}
+
+func (p *ProcessJob) Requeue() Job {
+	return NewProcessJob(p.Inputs, p.downloader, p.encoder)
 }
