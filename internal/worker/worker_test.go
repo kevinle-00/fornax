@@ -50,6 +50,20 @@ func (m *mockJob) Status() job.Status {
 	return m.status
 }
 
+func (m *mockJob) Error() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.execErr
+}
+
+func (m *mockJob) Progress() float64 {
+	return 0
+}
+
+func (m *mockJob) Requeue() job.Job {
+	return newMockJob(m.id, m.execErr)
+}
+
 func (m *mockJob) wasExecuted() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()

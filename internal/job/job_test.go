@@ -13,7 +13,7 @@ type mockDownloader struct {
 	err error
 }
 
-func (m *mockDownloader) Download(ctx context.Context, url, outputPath, quality string) error {
+func (m *mockDownloader) Download(ctx context.Context, url, outputPath, quality string, onProgress func(float64)) error {
 	return m.err
 }
 

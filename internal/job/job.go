@@ -29,14 +29,16 @@ type Job interface {
 	Status() Status
 	Error() error
 	Requeue() Job
+	Progress() float64
 }
 
 type BaseJob struct {
 	id string
 
-	mu     sync.Mutex
-	status Status
-	err    error
+	mu       sync.Mutex
+	status   Status
+	err      error
+	progress float64
 }
 
 func (b *BaseJob) ID() string {
@@ -67,6 +69,18 @@ func (b *BaseJob) setError(e error) {
 	b.err = e
 }
 
+func (b *BaseJob) Progress() float64 {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.progress
+}
+
+func (b *BaseJob) setProgress(p float64) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.progress = p
+}
+
 type DownloadInputs struct {
 	URL             string
 	OutputDirectory string
@@ -89,7 +103,7 @@ func NewDownloadJob(inputs DownloadInputs, downloader download.Downloader) *Down
 
 func (d *DownloadJob) Execute(ctx context.Context) error {
 	d.setStatus(StatusProcessing)
-	err := d.downloader.Download(ctx, d.Inputs.URL, d.Inputs.OutputDirectory, d.Inputs.Quality)
+	err := d.downloader.Download(ctx, d.Inputs.URL, d.Inputs.OutputDirectory, d.Inputs.Quality, d.setProgress)
 	if err != nil {
 		d.setStatus(StatusFailed)
 		d.setError(err)
@@ -176,7 +190,7 @@ func (p *ProcessJob) Execute(ctx context.Context) error {
 	tempPrefix := filepath.Join(os.TempDir(), "fornax-"+p.id)
 	downloadTemplate := tempPrefix + "-%(title)s.%(ext)s"
 
-	if err := p.downloader.Download(ctx, p.Inputs.URL, downloadTemplate, p.Inputs.Quality); err != nil {
+	if err := p.downloader.Download(ctx, p.Inputs.URL, downloadTemplate, p.Inputs.Quality, p.setProgress); err != nil {
 		p.setStatus(StatusFailed)
 		p.setError(err)
 

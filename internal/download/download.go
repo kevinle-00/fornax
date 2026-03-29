@@ -2,17 +2,20 @@
 package download
 
 import (
+	"bufio"
 	"context"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 // Interface in Go defines behaviour, a contract of methods that need to be implemented
 
 type Downloader interface {
-	Download(ctx context.Context, url, outputPath, quality string) error
+	Download(ctx context.Context, url, outputPath, quality string, onProgress func(float64)) error
 }
 
 // Structs in Go are data containers for fields, no behaviour
@@ -30,7 +33,7 @@ func New() *YtDlp {
 // downloader := New() <-- creates a *YtDlp
 // downloader.Download() <-- downloader is passed into Download, equivalent to this / self in other languages
 
-func (y *YtDlp) Download(ctx context.Context, url, outputPath, quality string) error {
+func (y *YtDlp) Download(ctx context.Context, url, outputPath, quality string, onProgress func(float64)) error {
 	cmdArgs := []string{} // Slice syntax, slices in go are dynamic arrays
 	if outputPath != "" {
 		info, err := os.Stat(outputPath)
@@ -42,10 +45,33 @@ func (y *YtDlp) Download(ctx context.Context, url, outputPath, quality string) e
 	if quality != "" {
 		cmdArgs = append(cmdArgs, "-f", quality)
 	}
+	cmdArgs = append(cmdArgs, "--newline")
 	cmdArgs = append(cmdArgs, url)
 	cmd := exec.CommandContext(ctx, "yt-dlp", cmdArgs...)
-	// TODO: Capture into a buffer instead later to render progress in TUI
-	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
-	return cmd.Run()
+
+	// Parse yt-dlp progress
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	scanner := bufio.NewScanner(stdout)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "[download]") && strings.Contains(line, "%") {
+			fields := strings.Fields(line)
+			percentStr := strings.TrimSuffix(fields[1], "%")
+			percent, _ := strconv.ParseFloat(percentStr, 64)
+
+			// convert from 0-100 scale to 0.0-1.0 scale
+			onProgress(percent / 100)
+		}
+	}
+	return cmd.Wait()
 }

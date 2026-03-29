@@ -30,6 +30,18 @@ func (m *mockJob) Status() job.Status {
 	return m.status
 }
 
+func (m *mockJob) Error() error {
+	return nil
+}
+
+func (m *mockJob) Progress() float64 {
+	return 0
+}
+
+func (m *mockJob) Requeue() job.Job {
+	return &mockJob{id: m.id, status: job.StatusPending}
+}
+
 func TestEnqueue(t *testing.T) {
 	tests := []struct {
 		name        string
