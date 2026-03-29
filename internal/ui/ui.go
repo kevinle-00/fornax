@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kevinle-00/fornax/internal/download"
@@ -283,10 +284,17 @@ func (m Model) viewDashboard() string {
 		case *job.ProcessJob:
 			jobType = "Process"
 		}
-		jobLine := fmt.Sprintf("%s Job: %s | Type: %s | Status: %s", cursor, j.ID()[:8], jobType, j.Status())
+		jobContent := fmt.Sprintf("%s | Job: %s | Type: %s | Status: %s", cursor, j.ID()[:8], jobType, j.Status())
+		// Use longest status ("processing") to keep layout stable across status changes
+		maxWidth := len(jobContent) + len(string(job.StatusProcessing)) - len(string(j.Status())) + len(" |")
+		jobLine := fmt.Sprintf("%-*s|", maxWidth-1, jobContent)
 		fmt.Fprintf(&s, "%s\n", jobLine)
 
-		maxWidth := len(jobLine)
+		if j.Status() == job.StatusProcessing || j.Status() == job.StatusDone {
+			// Width accounts for "  " indent prefix
+			bar := progress.New(progress.WithDefaultGradient(), progress.WithWidth(maxWidth-2))
+			fmt.Fprintf(&s, "\n  %s\n", bar.ViewAs(j.Progress()))
+		}
 
 		// TODO: need to make error messages useful for user
 		if j.Status() == job.StatusFailed {
@@ -306,7 +314,7 @@ type tickMsg time.Time
 
 // Sends a tickMsg after a delay
 func tickCmd() tea.Cmd {
-	return tea.Tick(500*time.Millisecond, func(t time.Time) tea.Msg {
+	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }

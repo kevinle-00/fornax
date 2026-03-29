@@ -3,13 +3,13 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"github.com/kevinle-00/fornax/internal/encode"
 	"github.com/kevinle-00/fornax/internal/job"
 	"github.com/kevinle-00/fornax/internal/queue"
 	"github.com/kevinle-00/fornax/internal/validate"
 	"github.com/kevinle-00/fornax/internal/worker"
 	"github.com/spf13/cobra"
+	"os"
 )
 
 // fornax encode file1.webm file2.webm -f mp4 -o output/
