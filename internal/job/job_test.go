@@ -22,7 +22,7 @@ type mockEncoder struct {
 	err error
 }
 
-func (m *mockEncoder) Encode(ctx context.Context, inputPath, outputPath string) error {
+func (m *mockEncoder) Encode(ctx context.Context, inputPath, outputPath string, onProgress func(float64)) error {
 	return m.err
 }
 

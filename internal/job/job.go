@@ -146,7 +146,7 @@ func NewEncodeJob(inputs EncodeInputs, encoder encode.Encoder) *EncodeJob {
 func (e *EncodeJob) Execute(ctx context.Context) error {
 	e.setStatus(StatusProcessing)
 
-	err := e.encoder.Encode(ctx, e.Inputs.InputPath, e.Inputs.outputPath())
+	err := e.encoder.Encode(ctx, e.Inputs.InputPath, e.Inputs.outputPath(), e.setProgress)
 	if err != nil {
 		e.setStatus(StatusFailed)
 		e.setError(err)
@@ -220,7 +220,7 @@ func (p *ProcessJob) Execute(ctx context.Context) error {
 	videoTitle := strings.TrimPrefix(fileNameNoExt, "fornax-"+p.id+"-")
 	outputPath := filepath.Join(p.Inputs.OutputDirectory, videoTitle+"."+p.Inputs.Format)
 
-	if err := p.encoder.Encode(ctx, downloadedFile, outputPath); err != nil {
+	if err := p.encoder.Encode(ctx, downloadedFile, outputPath, p.setProgress); err != nil {
 		p.setStatus(StatusFailed)
 		p.setError(err)
 
