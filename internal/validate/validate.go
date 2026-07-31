@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path/filepath"
 )
 
 func IsValidURL(str string) error {
@@ -22,23 +21,38 @@ func IsValidURL(str string) error {
 
 func IsValidInputPath(path string) error {
 	if path == "" {
-		return fmt.Errorf("input path is required")
+		return errors.New("input path is required")
 	}
 
-	// os.Stat returns a FileInfo struct (we ignore it) and an error,
-	// os.IsNotExist() takes in the error and returns true if the path does not exist
-	// and false if it doesnt
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return fmt.Errorf("path does not exist: %s", path)
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("input path does not exist: %s", path)
+		}
+		return fmt.Errorf("failed to inspect input path %s: %w", path, err)
 	}
+	if info.IsDir() {
+		return fmt.Errorf("input path is a directory: %s", path)
+	}
+
 	return nil
 }
 
 func IsValidOutputPath(path string) error {
-	dir := filepath.Dir(path)
-
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		return fmt.Errorf("directory does not exist: %s", dir)
+	if path == "" {
+		path = "."
 	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("output directory does not exist: %s", path)
+		}
+		return fmt.Errorf("failed to inspect output directory %s: %w", path, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("output path is not a directory: %s", path)
+	}
+
 	return nil
 }

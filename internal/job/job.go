@@ -4,6 +4,7 @@ package job
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -109,6 +110,7 @@ func (d *DownloadJob) Execute(ctx context.Context) error {
 		d.setError(err)
 		return err
 	}
+	d.setProgress(1)
 	d.setStatus(StatusDone)
 	return nil
 }
@@ -153,6 +155,7 @@ func (e *EncodeJob) Execute(ctx context.Context) error {
 
 		return err
 	}
+	e.setProgress(1)
 	e.setStatus(StatusDone)
 	return nil
 }
@@ -184,20 +187,37 @@ func NewProcessJob(inputs ProcessInputs, downloader download.Downloader, encoder
 	}
 }
 
-func (p *ProcessJob) Execute(ctx context.Context) error {
+func (p *ProcessJob) Execute(ctx context.Context) (retErr error) {
 	p.setStatus(StatusProcessing)
 
-	tempPrefix := filepath.Join(os.TempDir(), "fornax-"+p.id)
-	downloadTemplate := tempPrefix + "-%(title)s.%(ext)s"
+	tempDir, err := os.MkdirTemp("", "fornax-"+p.id+"-")
+	if err != nil {
+		p.setStatus(StatusFailed)
+		p.setError(err)
+		return err
+	}
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("failed to clean up temporary directory: %w", err))
+			p.setStatus(StatusFailed)
+			p.setError(retErr)
+		}
+	}()
 
-	if err := p.downloader.Download(ctx, p.Inputs.URL, downloadTemplate, p.Inputs.Quality, p.setProgress); err != nil {
+	downloadTemplate := filepath.Join(tempDir, "%(title)s.%(ext)s")
+	downloadProgress := func(progress float64) {
+		p.setProgress(progress * 0.5)
+	}
+
+	if err := p.downloader.Download(ctx, p.Inputs.URL, downloadTemplate, p.Inputs.Quality, downloadProgress); err != nil {
 		p.setStatus(StatusFailed)
 		p.setError(err)
 
 		return err
 	}
+	p.setProgress(0.5)
 
-	files, err := filepath.Glob(tempPrefix + "-*.*")
+	files, err := filepath.Glob(filepath.Join(tempDir, "*"))
 	if err != nil {
 		p.setStatus(StatusFailed)
 		p.setError(err)
@@ -212,21 +232,23 @@ func (p *ProcessJob) Execute(ctx context.Context) error {
 	}
 
 	downloadedFile := files[0]
-	defer os.Remove(downloadedFile)
 
 	fileName := filepath.Base(downloadedFile)
 	fileExt := filepath.Ext(fileName)
 	fileNameNoExt := strings.TrimSuffix(fileName, fileExt)
-	videoTitle := strings.TrimPrefix(fileNameNoExt, "fornax-"+p.id+"-")
-	outputPath := filepath.Join(p.Inputs.OutputDirectory, videoTitle+"."+p.Inputs.Format)
+	outputPath := filepath.Join(p.Inputs.OutputDirectory, fileNameNoExt+"."+p.Inputs.Format)
+	encodeProgress := func(progress float64) {
+		p.setProgress(0.5 + progress*0.5)
+	}
 
-	if err := p.encoder.Encode(ctx, downloadedFile, outputPath, p.setProgress); err != nil {
+	if err := p.encoder.Encode(ctx, downloadedFile, outputPath, encodeProgress); err != nil {
 		p.setStatus(StatusFailed)
 		p.setError(err)
 
 		return err
 	}
 
+	p.setProgress(1)
 	p.setStatus(StatusDone)
 	return nil
 }
