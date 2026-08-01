@@ -13,6 +13,7 @@ import (
 	"github.com/kevinle-00/fornax/internal/encode"
 	"github.com/kevinle-00/fornax/internal/job"
 	"github.com/kevinle-00/fornax/internal/queue"
+	"github.com/kevinle-00/fornax/internal/validate"
 )
 
 type Screen string
@@ -40,6 +41,7 @@ type Model struct {
 	downloader    download.Downloader
 	encoder       encode.Encoder
 	dashCursor    int
+	errorMessage  string
 }
 
 var stepDefinitions = map[string][]inputStep{
@@ -96,6 +98,7 @@ func updateMenuScreen(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.screen = InputScreen
 		m.commandInputs = map[string]string{}
 		m.inputStep = 0
+		m.errorMessage = ""
 		ti := textinput.New()
 		placeholder := stepDefinitions[m.selected][m.inputStep].placeholder
 		ti.Placeholder = placeholder
@@ -136,24 +139,52 @@ func createJob(m Model) job.Job {
 	return newJob
 }
 
+func validateInput(step inputStep, value string) error {
+	switch step.key {
+	case "url":
+		return validate.IsValidURL(value)
+	case "input":
+		return validate.IsValidInputPath(value)
+	case "output":
+		return validate.IsValidOutputPath(value)
+	case "format":
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("format is required")
+		}
+	}
+
+	return nil
+}
+
 func updateInputScreen(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c":
 		return m, tea.Quit
+	case "esc":
+		m.screen = MenuScreen
+		m.errorMessage = ""
+		return m, nil
 	case "enter":
 		currentStep := stepDefinitions[m.selected][m.inputStep]
-		m.commandInputs[currentStep.key] = m.input.Value()
-		m.inputStep++
+		value := m.input.Value()
+		if err := validateInput(currentStep, value); err != nil {
+			m.errorMessage = err.Error()
+			return m, nil
+		}
 
-		if m.inputStep == len(stepDefinitions[m.selected]) {
+		m.errorMessage = ""
+		m.commandInputs[currentStep.key] = value
+
+		if m.inputStep == len(stepDefinitions[m.selected])-1 {
 			newJob := createJob(m)
 			if err := m.queue.Enqueue(newJob); err != nil {
-				// TODO: add error UI
-				return m, tea.Quit
+				m.errorMessage = fmt.Sprintf("could not add job: %v", err)
+				return m, nil
 			}
 			m.screen = DashboardScreen
 			return m, tickCmd()
 		} else {
+			m.inputStep++
 			m.input.SetValue("")
 			newPlaceholder := stepDefinitions[m.selected][m.inputStep].placeholder
 			m.input.Placeholder = newPlaceholder
@@ -162,6 +193,7 @@ func updateInputScreen(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
 	}
 
 	var cmd tea.Cmd
+	m.errorMessage = ""
 	m.input, cmd = m.input.Update(msg)
 	return m, cmd
 }
@@ -228,6 +260,10 @@ func (m Model) viewInput() string {
 			fmt.Fprintf(&s, "%s: %s\n", step.key, m.input.View())
 		}
 	}
+	if m.errorMessage != "" {
+		fmt.Fprintf(&s, "\nError: %s\n", m.errorMessage)
+	}
+	s.WriteString("\nPress esc to return to the menu\n")
 
 	return s.String()
 }
@@ -248,6 +284,7 @@ func updateDashboardScreen(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "m":
 		m.cursor = 0
 		m.screen = MenuScreen
+		m.errorMessage = ""
 		return m, nil
 	case "r":
 		if len(jobs) > 0 {
@@ -255,9 +292,10 @@ func updateDashboardScreen(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
 			if selected.Status() == job.StatusFailed {
 				newJob := selected.Requeue()
 				if err := m.queue.Enqueue(newJob); err != nil {
-					// TODO: add error UI
-					return m, tea.Quit
+					m.errorMessage = fmt.Sprintf("could not requeue job: %v", err)
+					return m, nil
 				}
+				m.errorMessage = ""
 			}
 		}
 	}
@@ -306,6 +344,9 @@ func (m Model) viewDashboard() string {
 		}
 
 		fmt.Fprintf(&s, "%s\n", strings.Repeat("─", maxWidth))
+	}
+	if m.errorMessage != "" {
+		fmt.Fprintf(&s, "\nError: %s\n", m.errorMessage)
 	}
 	return s.String()
 }

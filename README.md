@@ -55,6 +55,7 @@ directories should already exist.
 | `up` / `k` | Move up |
 | `down` / `j` | Move down |
 | `enter` | Select or submit |
+| `esc` | Return to the menu from an input screen |
 | `m` | Return to the menu from the dashboard |
 | `r` | Requeue the selected failed job |
 | `q` | Quit from the menu or dashboard |
