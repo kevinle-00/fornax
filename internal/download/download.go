@@ -3,8 +3,10 @@ package download
 
 import (
 	"bufio"
+	"bytes"
 	"context"
-	"io"
+	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,29 +14,18 @@ import (
 	"strings"
 )
 
-// Interface in Go defines behaviour, a contract of methods that need to be implemented
-
 type Downloader interface {
 	Download(ctx context.Context, url, outputPath, quality string, onProgress func(float64)) error
 }
 
-// Structs in Go are data containers for fields, no behaviour
-
-type YtDlp struct{} //
-
-// Here this is the function to instantiate the ytdlp class/object? It returns the address of the yt-dlp object?
+type YtDlp struct{}
 
 func New() *YtDlp {
-	return &YtDlp{} // {} <-- struct literal syntax, creates an instance of the struct
+	return &YtDlp{}
 }
 
-// y here is a method receiver, it indicates what struct this method belongs to.
-// eg.
-// downloader := New() <-- creates a *YtDlp
-// downloader.Download() <-- downloader is passed into Download, equivalent to this / self in other languages
-
 func (y *YtDlp) Download(ctx context.Context, url, outputPath, quality string, onProgress func(float64)) error {
-	cmdArgs := []string{} // Slice syntax, slices in go are dynamic arrays
+	cmdArgs := []string{}
 	if outputPath != "" {
 		info, err := os.Stat(outputPath)
 		if err == nil && info.IsDir() {
@@ -45,33 +36,67 @@ func (y *YtDlp) Download(ctx context.Context, url, outputPath, quality string, o
 	if quality != "" {
 		cmdArgs = append(cmdArgs, "-f", quality)
 	}
-	cmdArgs = append(cmdArgs, "--newline")
+	cmdArgs = append(cmdArgs, "--newline", "--no-color")
 	cmdArgs = append(cmdArgs, url)
 	cmd := exec.CommandContext(ctx, "yt-dlp", cmdArgs...)
-	cmd.Stderr = io.Discard
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 
-	// Parse yt-dlp progress
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		return fmt.Errorf("read yt-dlp output: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		return err
+		return fmt.Errorf("start yt-dlp: %w", err)
 	}
 
 	scanner := bufio.NewScanner(stdout)
-
 	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "[download]") && strings.Contains(line, "%") {
-			fields := strings.Fields(line)
-			percentStr := strings.TrimSuffix(fields[1], "%")
-			percent, _ := strconv.ParseFloat(percentStr, 64)
-
-			// convert from 0-100 scale to 0.0-1.0 scale
-			onProgress(percent / 100)
+		if progress, ok := parseProgress(scanner.Text()); ok && onProgress != nil {
+			onProgress(progress)
 		}
 	}
-	return cmd.Wait()
+	scanErr := scanner.Err()
+	waitErr := cmd.Wait()
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("yt-dlp canceled: %w", err)
+	}
+	if scanErr != nil {
+		return fmt.Errorf("read yt-dlp progress: %w", scanErr)
+	}
+	if waitErr != nil {
+		return toolError("yt-dlp", waitErr, stderr.String())
+	}
+
+	return nil
+}
+
+func parseProgress(line string) (float64, bool) {
+	if !strings.HasPrefix(line, "[download]") {
+		return 0, false
+	}
+
+	for _, field := range strings.Fields(line) {
+		percentText, found := strings.CutSuffix(field, "%")
+		if !found {
+			continue
+		}
+		percent, err := strconv.ParseFloat(percentText, 64)
+		if err != nil || math.IsNaN(percent) || math.IsInf(percent, 0) {
+			continue
+		}
+		percent = max(0, min(percent, 100))
+		return percent / 100, true
+	}
+
+	return 0, false
+}
+
+func toolError(name string, err error, stderr string) error {
+	details := strings.Join(strings.Fields(stderr), " ")
+	if details == "" {
+		return fmt.Errorf("%s failed: %w", name, err)
+	}
+	return fmt.Errorf("%s failed: %w: %s", name, err, details)
 }

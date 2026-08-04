@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -15,24 +18,30 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
 	downloader := download.New()
 	encoder := encode.New()
 	queue := queue.New(10)
 	workerPool := worker.NewWorkerPool(queue, 5)
-	defer workerPool.Stop()
-	defer queue.Close()
 
-	workerPool.Start(context.Background())
+	workerPool.Start(ctx)
 
-	if _, err := tea.NewProgram(ui.NewModel(queue, downloader, encoder)).Run(); err != nil {
-		fmt.Println("Error:", err)
-		os.Exit(1)
+	_, runErr := tea.NewProgram(ui.NewModel(queue, downloader, encoder), tea.WithContext(ctx)).Run()
+	cancel()
+	queue.Close()
+	workerPool.Stop()
+
+	if runErr != nil && !errors.Is(runErr, tea.ErrProgramKilled) {
+		return fmt.Errorf("run TUI: %w", runErr)
 	}
-
-	/*
-		if err := cmd.Execute(); err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
-		}
-	*/
+	return nil
 }

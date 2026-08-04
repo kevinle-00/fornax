@@ -3,9 +3,10 @@ package encode
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
-	"io"
+	"math"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -22,15 +23,17 @@ func New() *FFmpeg {
 }
 
 func (f *FFmpeg) Encode(ctx context.Context, inputPath, outputPath string, onProgress func(float64)) error {
-	// Get total duration for progress calculation
-	// -v quiet: suppress logs, -show_entries format=duration: only output duration
-	// -of csv=p=0: output as plain number (e.g., "213.043084")
-	probeCmd := exec.CommandContext(ctx, "ffprobe", "-v", "quiet", "-show_entries",
+	probeCmd := exec.CommandContext(ctx, "ffprobe", "-v", "error", "-show_entries",
 		"format=duration", "-of", "csv=p=0", inputPath)
+	var probeStderr bytes.Buffer
+	probeCmd.Stderr = &probeStderr
 
 	output, err := probeCmd.Output()
 	if err != nil {
-		return err
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return fmt.Errorf("ffprobe canceled: %w", ctxErr)
+		}
+		return toolError("ffprobe", err, probeStderr.String())
 	}
 
 	outputStr := strings.TrimSpace(string(output))
@@ -38,30 +41,63 @@ func (f *FFmpeg) Encode(ctx context.Context, inputPath, outputPath string, onPro
 	if err != nil {
 		return fmt.Errorf("failed to parse duration: %w", err)
 	}
+	if duration <= 0 || math.IsNaN(duration) || math.IsInf(duration, 0) {
+		return fmt.Errorf("invalid media duration: %v", duration)
+	}
 
-	// -progress pipe:1: output machine readable progress (key=value pairs) to stdout
-	cmd := exec.CommandContext(ctx, "ffmpeg", "-i", inputPath, "-progress", "pipe:1", outputPath)
-	cmd.Stderr = io.Discard
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-nostdin", "-n", "-v", "error", "-i", inputPath,
+		"-progress", "pipe:1", "-nostats", outputPath)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		return fmt.Errorf("read ffmpeg output: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		return err
+		return fmt.Errorf("start ffmpeg: %w", err)
 	}
 
 	scanner := bufio.NewScanner(stdout)
-
 	for scanner.Scan() {
-		line := scanner.Text()
-		before, after, found := strings.Cut(line, "=")
-
-		if found && before == "out_time_us" {
-			vidTime, _ := strconv.ParseFloat(after, 64)
-			onProgress(vidTime / (duration * 1000000))
+		if progress, ok := parseProgress(scanner.Text(), duration); ok && onProgress != nil {
+			onProgress(progress)
 		}
 	}
-	return cmd.Wait()
+	scanErr := scanner.Err()
+	waitErr := cmd.Wait()
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("ffmpeg canceled: %w", err)
+	}
+	if scanErr != nil {
+		return fmt.Errorf("read ffmpeg progress: %w", scanErr)
+	}
+	if waitErr != nil {
+		return toolError("ffmpeg", waitErr, stderr.String())
+	}
+
+	return nil
+}
+
+func parseProgress(line string, duration float64) (float64, bool) {
+	key, value, found := strings.Cut(line, "=")
+	if !found || key != "out_time_us" || duration <= 0 {
+		return 0, false
+	}
+
+	microseconds, err := strconv.ParseFloat(value, 64)
+	if err != nil || math.IsNaN(microseconds) || math.IsInf(microseconds, 0) {
+		return 0, false
+	}
+	progress := microseconds / (duration * 1_000_000)
+	return max(0, min(progress, 1)), true
+}
+
+func toolError(name string, err error, stderr string) error {
+	details := strings.Join(strings.Fields(stderr), " ")
+	if details == "" {
+		return fmt.Errorf("%s failed: %w", name, err)
+	}
+	return fmt.Errorf("%s failed: %w: %s", name, err, details)
 }
