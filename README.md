@@ -32,16 +32,17 @@ brew install yt-dlp ffmpeg
 
 ## Running Fornax
 
-Run the project directly:
-
-```bash
-go run .
-```
-
-Or build a binary first:
+Build the application:
 
 ```bash
 go build -o fornax .
+```
+
+### TUI
+
+Run Fornax without a command to open the interactive dashboard:
+
+```bash
 ./fornax
 ```
 
@@ -61,12 +62,28 @@ directories should already exist.
 | `q` | Quit from the menu or dashboard |
 | `ctrl+c` | Quit from any screen |
 
+### CLI
+
+The same workflows can run without the interactive dashboard:
+
+```bash
+./fornax download <url>... --output output/
+./fornax encode <file>... --format mp4 --output output/
+./fornax process <url>... --format mp4 --output output/
+```
+
+Use `--quality` to pass a format selector to `yt-dlp`. Each command prints a
+result for every input and returns an error if any job fails. Run
+`./fornax <command> --help` for all available flags.
+
 ## Architecture
 
 ```mermaid
 flowchart LR
     User[User] --> TUI[Bubble Tea TUI]
+    User --> CLI[CLI Commands]
     TUI --> Queue[Job Queue]
+    CLI --> Queue
     Queue --> Workers[Worker Pool]
 
     Workers --> Download[Download Job]
@@ -84,11 +101,12 @@ flowchart LR
     FFmpeg --> Output
 
     Workers -. status and progress .-> TUI
+    Workers -. final results .-> CLI
 ```
 
-The TUI adds jobs to a bounded queue. A pool of workers reads from that queue
-and runs jobs concurrently. Each job stores its own status, progress, and error
-so the dashboard can update while work is running.
+The TUI and CLI both add jobs to a queue. A pool of workers reads from that
+queue and runs jobs concurrently. Each job stores its own status, progress, and
+error so either interface can report what happened.
 
 ## Development
 
@@ -98,8 +116,9 @@ go vet ./...
 go test ./...
 ```
 
-The project is split into small packages under `internal/`:
+The project is split into small packages:
 
+- `cmd`: contains the CLI commands and starts the TUI
 - `download`: runs `yt-dlp`
 - `encode`: runs `ffprobe` and `ffmpeg`
 - `job`: defines download, encode, and combined jobs

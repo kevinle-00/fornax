@@ -1,64 +1,51 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
+	"strings"
+
 	"github.com/kevinle-00/fornax/internal/encode"
 	"github.com/kevinle-00/fornax/internal/job"
-	"github.com/kevinle-00/fornax/internal/queue"
 	"github.com/kevinle-00/fornax/internal/validate"
-	"github.com/kevinle-00/fornax/internal/worker"
 	"github.com/spf13/cobra"
-	"os"
 )
 
-// fornax encode file1.webm file2.webm -f mp4 -o output/
+func newEncodeCommand(encoder encode.Encoder) *cobra.Command {
+	var outputDirectory string
+	var format string
 
-var encodeCmd = &cobra.Command{
-	Use:   "encode <input>... ",
-	Short: "Encode media file format",
-	Args:  cobra.MinimumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		format, _ := cmd.Flags().GetString("format")
-		outputDirectory, _ := cmd.Flags().GetString("output")
-
-		if err := validate.IsValidOutputPath(outputDirectory); err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
-		}
-
-		// TODO: Make encode manually cancellable by user
-
-		encoder := encode.New()
-		jobQueue := queue.New(10)
-		for _, inputPath := range args {
-			if err := validate.IsValidInputPath(inputPath); err != nil {
-				fmt.Println("Error:", err)
-				os.Exit(1)
+	encodeCmd := &cobra.Command{
+		Use:   "encode <input>...",
+		Short: "Convert local media files",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			format = strings.TrimSpace(format)
+			if format == "" {
+				return fmt.Errorf("format is required")
+			}
+			if err := validate.IsValidOutputPath(outputDirectory); err != nil {
+				return err
+			}
+			for _, inputPath := range args {
+				if err := validate.IsValidInputPath(inputPath); err != nil {
+					return fmt.Errorf("invalid input %q: %w", inputPath, err)
+				}
 			}
 
-			encodeInputs := job.EncodeInputs{
-				InputPath:       inputPath,
-				OutputDirectory: outputDirectory,
-				Format:          format,
+			jobs := make([]namedJob, 0, len(args))
+			for _, inputPath := range args {
+				inputs := job.EncodeInputs{
+					InputPath:       inputPath,
+					OutputDirectory: outputDirectory,
+					Format:          format,
+				}
+				jobs = append(jobs, namedJob{source: inputPath, job: job.NewEncodeJob(inputs, encoder)})
 			}
-			newJob := job.NewEncodeJob(encodeInputs, encoder)
-			if err := jobQueue.Enqueue(newJob); err != nil {
-				fmt.Println("Error:", err)
-				os.Exit(1)
-			}
-		}
-		jobQueue.Close()
-		workerPool := worker.NewWorkerPool(jobQueue, 5)
-		workerPool.Start(context.Background())
+			return runJobs(cmd.Context(), jobs, cmd.OutOrStdout())
+		},
+	}
 
-		workerPool.Stop()
-	},
-}
-
-func init() {
-	rootCmd.AddCommand(encodeCmd)
-	encodeCmd.Flags().StringP("output", "o", ".", "Output directory")
-	encodeCmd.Flags().StringP("format", "f", "", "Format")
-	_ = encodeCmd.MarkFlagRequired("format")
+	encodeCmd.Flags().StringVarP(&outputDirectory, "output", "o", ".", "Existing output directory")
+	encodeCmd.Flags().StringVarP(&format, "format", "f", "", "Output format (required)")
+	return encodeCmd
 }
