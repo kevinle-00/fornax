@@ -1,4 +1,3 @@
-// Package queue_test
 package queue_test
 
 import (
@@ -9,8 +8,6 @@ import (
 	"github.com/kevinle-00/fornax/internal/job"
 	"github.com/kevinle-00/fornax/internal/queue"
 )
-
-// mockJob implements job.Job.
 
 type mockJob struct {
 	id     string

@@ -10,7 +10,6 @@ import (
 	"github.com/kevinle-00/fornax/internal/job"
 )
 
-// mockDownloader implements download.Downloader.
 type mockDownloader struct {
 	err           error
 	progress      []float64
@@ -35,7 +34,6 @@ func (m *mockDownloader) Download(ctx context.Context, url, outputPath, quality 
 	return m.err
 }
 
-// mockEncoder implements encode.Encoder.
 type mockEncoder struct {
 	err           error
 	progress      []float64

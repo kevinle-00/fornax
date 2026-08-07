@@ -1,4 +1,4 @@
-// Package download is a yt-dlp wrapper
+// Package download runs yt-dlp downloads.
 package download
 
 import (
@@ -18,13 +18,13 @@ type Downloader interface {
 	Download(ctx context.Context, url, outputPath, quality string, onProgress func(float64)) error
 }
 
-type YtDlp struct{}
+type YtDLP struct{}
 
-func New() *YtDlp {
-	return &YtDlp{}
+func New() *YtDLP {
+	return &YtDLP{}
 }
 
-func (y *YtDlp) Download(ctx context.Context, url, outputPath, quality string, onProgress func(float64)) error {
+func (y *YtDLP) Download(ctx context.Context, url, outputPath, quality string, onProgress func(float64)) error {
 	cmdArgs := []string{}
 	if outputPath != "" {
 		info, err := os.Stat(outputPath)

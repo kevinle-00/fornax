@@ -155,7 +155,6 @@ func TestWorkerPoolRespectsContext(t *testing.T) {
 
 	select {
 	case <-done:
-		// Workers stopped as expected.
 	case <-time.After(2 * time.Second):
 		t.Fatal("workers did not stop after context cancellation")
 	}

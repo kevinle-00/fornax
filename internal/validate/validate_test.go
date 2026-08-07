@@ -30,6 +30,31 @@ func TestIsValidURL(t *testing.T) {
 	}
 }
 
+func TestIsValidFormat(t *testing.T) {
+	tests := []struct {
+		name    string
+		format  string
+		wantErr bool
+	}{
+		{name: "letters", format: "webm", wantErr: false},
+		{name: "letters and numbers", format: "mp4", wantErr: false},
+		{name: "starts with number", format: "3gp", wantErr: false},
+		{name: "empty", format: "", wantErr: true},
+		{name: "leading dot", format: ".mp4", wantErr: true},
+		{name: "spaces", format: "m p4", wantErr: true},
+		{name: "path", format: "../mp4", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validate.IsValidFormat(tt.format)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("IsValidFormat(%q) error = %v, wantErr %v", tt.format, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestIsValidInputPath(t *testing.T) {
 	tempDir := t.TempDir()
 	inputPath := filepath.Join(tempDir, "input.mp4")

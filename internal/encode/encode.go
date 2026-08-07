@@ -1,4 +1,4 @@
-// Package encode is a ffmpeg wrapper
+// Package encode runs ffprobe and ffmpeg conversions.
 package encode
 
 import (

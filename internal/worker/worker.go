@@ -1,4 +1,4 @@
-// Package worker provides a concurrent job processing pool
+// Package worker runs jobs concurrently.
 package worker
 
 import (
@@ -31,7 +31,7 @@ func (w *WorkerPool) Start(ctx context.Context) {
 					return
 				}
 
-				// error is stored on the job via setError; callers retrieve it via job.Error()
+				// Jobs store their own errors for the UI and CLI.
 				_ = job.Execute(ctx)
 			}
 		})

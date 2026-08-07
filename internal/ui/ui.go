@@ -1,4 +1,4 @@
-// Package ui
+// Package ui contains the terminal interface.
 package ui
 
 import (
@@ -148,9 +148,7 @@ func validateInput(step inputStep, value string) error {
 	case "output":
 		return validate.IsValidOutputPath(value)
 	case "format":
-		if strings.TrimSpace(value) == "" {
-			return fmt.Errorf("format is required")
-		}
+		return validate.IsValidFormat(value)
 	}
 
 	return nil
@@ -167,6 +165,9 @@ func updateInputScreen(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "enter":
 		currentStep := stepDefinitions[m.selected][m.inputStep]
 		value := m.input.Value()
+		if currentStep.key == "format" {
+			value = strings.TrimSpace(value)
+		}
 		if err := validateInput(currentStep, value); err != nil {
 			m.errorMessage = err.Error()
 			return m, nil
@@ -323,18 +324,17 @@ func (m Model) viewDashboard() string {
 			jobType = "Process"
 		}
 		jobContent := fmt.Sprintf("%s | Job: %s | Type: %s | Status: %s", cursor, j.ID()[:8], jobType, j.Status())
-		// Use longest status ("processing") to keep layout stable across status changes
+		// Keep the row width stable as the status changes.
 		maxWidth := len(jobContent) + len(string(job.StatusProcessing)) - len(string(j.Status())) + len(" |")
 		jobLine := fmt.Sprintf("%-*s|", maxWidth-1, jobContent)
 		fmt.Fprintf(&s, "%s\n", jobLine)
 
 		if j.Status() == job.StatusProcessing || j.Status() == job.StatusDone {
-			// Width accounts for "  " indent prefix
+			// Leave room for the two-space indent.
 			bar := progress.New(progress.WithDefaultGradient(), progress.WithWidth(maxWidth-2))
 			fmt.Fprintf(&s, "\n  %s\n", bar.ViewAs(j.Progress()))
 		}
 
-		// TODO: need to make error messages useful for user
 		if j.Status() == job.StatusFailed {
 			errLine := fmt.Sprintf("  Error: %v", j.Error())
 			fmt.Fprintf(&s, "%s\n", errLine)
@@ -353,7 +353,6 @@ func (m Model) viewDashboard() string {
 
 type tickMsg time.Time
 
-// Sends a tickMsg after a delay
 func tickCmd() tea.Cmd {
 	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
 		return tickMsg(t)

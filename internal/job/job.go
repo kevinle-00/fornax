@@ -1,4 +1,4 @@
-// Package job defines the job types used by the worker system
+// Package job defines the work handled by the worker pool.
 package job
 
 import (

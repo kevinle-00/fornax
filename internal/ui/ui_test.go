@@ -56,6 +56,7 @@ func TestUpdateInputScreenRejectsInvalidInput(t *testing.T) {
 		{name: "missing input file", selected: "Encode", step: 0, value: filepath.Join(t.TempDir(), "missing.mp4")},
 		{name: "missing output directory", selected: "Process", step: 1, value: filepath.Join(t.TempDir(), "missing")},
 		{name: "empty format", selected: "Encode", step: 1, value: "   "},
+		{name: "unsafe format", selected: "Encode", step: 1, value: "../mp4"},
 	}
 
 	for _, tt := range tests {

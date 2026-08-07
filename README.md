@@ -15,6 +15,7 @@ progress shown in a terminal dashboard.
 - Convert local media files with `ffmpeg`
 - Download and convert media in one job
 - Process several jobs concurrently
+- Use either the interactive dashboard or CLI commands
 - View job status and progress in a terminal dashboard
 - Manually requeue failed jobs
 

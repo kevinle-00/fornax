@@ -20,8 +20,8 @@ func newEncodeCommand(encoder encode.Encoder) *cobra.Command {
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format = strings.TrimSpace(format)
-			if format == "" {
-				return fmt.Errorf("format is required")
+			if err := validate.IsValidFormat(format); err != nil {
+				return err
 			}
 			if err := validate.IsValidOutputPath(outputDirectory); err != nil {
 				return err

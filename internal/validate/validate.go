@@ -1,4 +1,4 @@
-// Package validate contains validation functions
+// Package validate checks user input before jobs are created.
 package validate
 
 import (
@@ -15,6 +15,18 @@ func IsValidURL(str string) error {
 	url, err := url.Parse(str)
 	if err != nil || url.Scheme == "" || url.Host == "" {
 		return fmt.Errorf("invalid url: %s", str)
+	}
+	return nil
+}
+
+func IsValidFormat(format string) error {
+	if format == "" {
+		return errors.New("format is required")
+	}
+	for _, char := range format {
+		if (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') && (char < '0' || char > '9') {
+			return fmt.Errorf("invalid format %q: use letters and numbers only", format)
+		}
 	}
 	return nil
 }

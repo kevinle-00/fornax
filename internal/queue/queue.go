@@ -1,4 +1,4 @@
-// Package queue provides a bounded job queue for the worker pool.
+// Package queue stores jobs waiting for a worker.
 package queue
 
 import (

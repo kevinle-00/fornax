@@ -172,6 +172,23 @@ func TestEncodeCommandRequiresFormat(t *testing.T) {
 	}
 }
 
+func TestEncodeCommandRejectsUnsafeFormat(t *testing.T) {
+	input := filepath.Join(t.TempDir(), "input.webm")
+	if err := os.WriteFile(input, []byte("media"), 0o600); err != nil {
+		t.Fatalf("failed to create input: %v", err)
+	}
+	encoder := &mockEncoder{}
+
+	_, err := executeCommand(t, &mockDownloader{}, encoder, "encode", input, "--format", "../mp4")
+
+	if err == nil || !strings.Contains(err.Error(), "letters and numbers only") {
+		t.Fatalf("expected invalid format error, got %v", err)
+	}
+	if encoder.callCount() != 0 {
+		t.Errorf("expected no encodes to start, got %d", encoder.callCount())
+	}
+}
+
 func TestProcessCommandDownloadsAndEncodes(t *testing.T) {
 	downloader := &mockDownloader{createFile: true}
 	encoder := &mockEncoder{}
